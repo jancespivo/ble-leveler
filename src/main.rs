@@ -12,7 +12,7 @@ use static_cell::StaticCell;
 use trouble_host::Address;
 
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
-use embassy_nrf::peripherals::TWISPI0;
+use embassy_nrf::peripherals::TWISPI1;
 use micromath::F32Ext;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -36,7 +36,7 @@ embassy_nrf::bind_interrupts!(struct Irqs {
     TIMER0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
     RTC0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
 
-    TWISPI0 => embassy_nrf::twim::InterruptHandler<TWISPI0>;
+    TWISPI1 => embassy_nrf::twim::InterruptHandler<TWISPI1>;
 });
 
 #[embassy_executor::task]
@@ -136,7 +136,7 @@ async fn main(spawner: Spawner) {
     let config = embassy_nrf::twim::Config::default();
     static RAM_BUFFER: static_cell::ConstStaticCell<[u8; 16]> =
         static_cell::ConstStaticCell::new([0; 16]);
-    let mut twi = Twim::new(p.TWISPI0, Irqs, p.P0_04, p.P0_05, config, RAM_BUFFER.take());
+    let mut twi = Twim::new(p.TWISPI1, Irqs, p.P0_07, p.P0_27, config, RAM_BUFFER.take());
 
     // 3. Configure LSM6DS3: 104 Hz (ODR), +/- 2g scale
     let setup_buf = [CTRL1_XL, 0x40];
