@@ -3,7 +3,6 @@
 
 use bt_hci::uuid::appearance;
 
-use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_nrf::rng;
@@ -12,7 +11,6 @@ use embassy_time::Duration;
 use static_cell::StaticCell;
 use trouble_host::Address;
 
-use defmt::*;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::peripherals::TWISPI0;
 use micromath::F32Ext;
@@ -29,7 +27,6 @@ use trouble_host::gatt::GattConnection;
 use trouble_host::peripheral::Peripheral;
 use trouble_host::prelude::*;
 use {defmt_rtt as _, panic_probe as _};
-
 
 embassy_nrf::bind_interrupts!(struct Irqs {
     RNG => embassy_nrf::rng::InterruptHandler<embassy_nrf::peripherals::RNG>;
@@ -119,7 +116,6 @@ async fn read_mpu_angles(twi: &mut Twim<'static>) -> (f32, f32) {
 async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
     loop {
         if let Err(e) = runner.run().await {
-            #[cfg(feature = "defmt")]
             let e = defmt::Debug2Format(&e);
             panic!("[ble_task] error: {:?}", e);
         }
@@ -158,10 +154,10 @@ async fn main(spawner: Spawner) {
         skip_wait_lfclk_started: mpsl::raw::MPSL_DEFAULT_SKIP_WAIT_LFCLK_STARTED != 0,
     };
     static MPSL: StaticCell<MultiprotocolServiceLayer> = StaticCell::new();
-    let mpsl = MPSL.init(unwrap!(mpsl::MultiprotocolServiceLayer::new(
+    let mpsl = MPSL.init(defmt::unwrap!(mpsl::MultiprotocolServiceLayer::new(
         mpsl_p, Irqs, lfclk_cfg
     )));
-    spawner.spawn(unwrap!(mpsl_task(&*mpsl)));
+    spawner.spawn(defmt::unwrap!(mpsl_task(&*mpsl)));
 
     let sdc_p = sdc::Peripherals::new(
         p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22, p.PPI_CH23, p.PPI_CH24,
@@ -171,12 +167,12 @@ async fn main(spawner: Spawner) {
     let mut rng = rng::Rng::new(p.RNG, Irqs);
 
     let mut sdc_mem = sdc::Mem::<4720>::new();
-    let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
+    let sdc = defmt::unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
     // GENERIC
 
     let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
-    info!("Our address = {:?}", address);
+    defmt::info!("Our address = {:?}", address);
 
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
@@ -186,7 +182,7 @@ async fn main(spawner: Spawner) {
     let runner = stack.runner();
     let mut peripheral = stack.peripheral();
 
-    info!("Starting advertising and GATT service");
+    defmt::info!("Starting advertising and GATT service");
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
         name: "TrouBLE",
         appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
@@ -249,8 +245,8 @@ async fn advertise<'values, 'server, C: Controller>(
             },
         )
         .await?;
-    info!("[adv] advertising");
+    defmt::info!("[adv] advertising");
     let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    info!("[adv] connection established");
+    defmt::info!("[adv] connection established");
     Ok(conn)
 }
