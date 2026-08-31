@@ -5,12 +5,14 @@ use bt_hci::uuid::appearance;
 
 use defmt::*;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
 use embassy_nrf::rng;
 use embassy_nrf::twim::Twim;
 use embassy_time::Duration;
 use static_cell::StaticCell;
 use trouble_host::Address;
 
+use defmt::*;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::peripherals::TWISPI0;
 use micromath::F32Ext;
@@ -27,6 +29,7 @@ use trouble_host::gatt::GattConnection;
 use trouble_host::peripheral::Peripheral;
 use trouble_host::prelude::*;
 use {defmt_rtt as _, panic_probe as _};
+
 
 embassy_nrf::bind_interrupts!(struct Irqs {
     RNG => embassy_nrf::rng::InterruptHandler<embassy_nrf::peripherals::RNG>;
@@ -113,6 +116,16 @@ async fn read_mpu_angles(twi: &mut Twim<'static>) -> (f32, f32) {
     (pitch, roll)
 }
 
+async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
+    loop {
+        if let Err(e) = runner.run().await {
+            #[cfg(feature = "defmt")]
+            let e = defmt::Debug2Format(&e);
+            panic!("[ble_task] error: {:?}", e);
+        }
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
@@ -179,35 +192,37 @@ async fn main(spawner: Spawner) {
         appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
     }))
     .unwrap();
-
-    loop {
-        let conn = advertise("Trouble Example", &mut peripheral, &server)
-            .await
-            .unwrap();
-
-        let pitch_offset = 0.0f32;
-        let roll_offset = 0.0f32;
+    let _ = join(ble_task(runner), async {
         loop {
-            let (pitch, roll) = read_mpu_angles(&mut twi).await;
-
-            let adj_pitch = ((pitch - pitch_offset) * 100.0) as i16;
-            let adj_roll = ((roll - roll_offset) * 100.0) as i16;
-
-            // Encode payload: [pitch_lo, pitch_hi, roll_lo, roll_hi]
-            let payload: [u8; 4] = [
-                adj_pitch as u8,
-                (adj_pitch >> 8) as u8,
-                adj_roll as u8,
-                (adj_roll >> 8) as u8,
-            ];
-            server
-                .leveling
-                .angles
-                .notify(&conn, &payload, true)
+            let conn = advertise("Trouble Example", &mut peripheral, &server)
                 .await
-                .unwrap(); // FIXME
+                .unwrap();
+
+            let pitch_offset = 0.0f32;
+            let roll_offset = 0.0f32;
+            loop {
+                let (pitch, roll) = read_mpu_angles(&mut twi).await;
+
+                let adj_pitch = ((pitch - pitch_offset) * 100.0) as i16;
+                let adj_roll = ((roll - roll_offset) * 100.0) as i16;
+
+                // Encode payload: [pitch_lo, pitch_hi, roll_lo, roll_hi]
+                let payload: [u8; 4] = [
+                    adj_pitch as u8,
+                    (adj_pitch >> 8) as u8,
+                    adj_roll as u8,
+                    (adj_roll >> 8) as u8,
+                ];
+                server
+                    .leveling
+                    .angles
+                    .notify(&conn, &payload, true)
+                    .await
+                    .unwrap(); // FIXME
+            }
         }
-    }
+    })
+    .await;
 }
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
