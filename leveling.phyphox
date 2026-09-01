@@ -1,37 +1,70 @@
 <phyphox version="1.19">
     <title>Campervan Leveling</title>
     <category>Campervan Tools</category>
-    <description>Universal Leveling with Dropdown Mounting Selector and Zero Tare</description>
+    <description
+    >Dual-Axis Crosshair Gauge with 6-Surface Mounting Selector</description>
 
     <data-containers>
-        <!-- Raw Accelerometer Inputs (12 bytes from BLE) -->
+        <!-- Raw Accelerometer Inputs (6 bytes int16 from BLE) -->
         <container size="1">raw_ax</container>
         <container size="1">raw_ay</container>
         <container size="1">raw_az</container>
 
-        <!-- Dropdown Orientation Selection (1.0 to 6.0, default 1.0) -->
+        <!-- Dropdown Selection: 1.0 to 6.0 (Default 1.0 = Floor) -->
         <container size="1" init="1.0">mount_mode</container>
 
-        <!-- Lookup Tables for the 6 Cube Mounting Surfaces -->
-        <container size="6" static="true" init="1.0,2.0,3.0,4.0,5.0,6.0">lut_mode</container>
-        <container size="6" static="true" init="1.0,-1.0,1.0,-1.0,0.0,0.0">lut_lat_x</container>
-        <container size="6" static="true" init="0.0,0.0,0.0,0.0,-1.0,1.0">lut_lat_z</container>
-        
-        <container size="6" static="true" init="1.0,1.0,0.0,0.0,1.0,1.0">lut_long_y</container>
-        <container size="6" static="true" init="0.0,0.0,-1.0,1.0,0.0,0.0">lut_long_z</container>
-        
-        <container size="6" static="true" init="0.0,0.0,0.0,0.0,1.0,-1.0">lut_vert_x</container>
-        <container size="6" static="true" init="0.0,0.0,1.0,-1.0,0.0,0.0">lut_vert_y</container>
-        <container size="6" static="true" init="1.0,-1.0,0.0,0.0,0.0,0.0">lut_vert_z</container>
+        <!-- Lookup Tables for 6 Cube Mounting Surfaces -->
+        <container
+            size="6"
+            static="true"
+            init="1.0, 2.0, 3.0, 4.0, 5.0, 6.0"
+        >lut_mode</container>
+        <container
+            size="6"
+            static="true"
+            init="1.0, -1.0, 1.0, -1.0, 0.0, 0.0"
+        >lut_lat_x</container>
+        <container
+            size="6"
+            static="true"
+            init="0.0, 0.0, 0.0, 0.0, -1.0, 1.0"
+        >lut_lat_z</container>
 
-        <!-- Dynamic Transformation Matrix Coefficients -->
-        <container size="1">m_lat_x</container>
-        <container size="1">m_lat_z</container>
-        <container size="1">m_long_y</container>
-        <container size="1">m_long_z</container>
-        <container size="1">m_vert_x</container>
-        <container size="1">m_vert_y</container>
-        <container size="1">m_vert_z</container>
+        <container
+            size="6"
+            static="true"
+            init="1.0, 1.0, 0.0, 0.0, 1.0, 1.0"
+        >lut_long_y</container>
+        <container
+            size="6"
+            static="true"
+            init="0.0, 0.0, -1.0, 1.0, 0.0, 0.0"
+        >lut_long_z</container>
+
+        <container
+            size="6"
+            static="true"
+            init="0.0, 0.0, 0.0, 0.0, 1.0, -1.0"
+        >lut_vert_x</container>
+        <container
+            size="6"
+            static="true"
+            init="0.0, 0.0, 1.0, -1.0, 0.0, 0.0"
+        >lut_vert_y</container>
+        <container
+            size="6"
+            static="true"
+            init="1.0, -1.0, 0.0, 0.0, 0.0, 0.0"
+        >lut_vert_z</container>
+
+        <!-- Dynamic Matrix Coefficients -->
+        <container size="1" init="1.0">m_lat_x</container>
+        <container size="1" init="0.0">m_lat_z</container>
+        <container size="1" init="1.0">m_long_y</container>
+        <container size="1" init="0.0">m_long_z</container>
+        <container size="1" init="0.0">m_vert_x</container>
+        <container size="1" init="0.0">m_vert_y</container>
+        <container size="1" init="1.0">m_vert_z</container>
 
         <!-- Remapped Vehicle Acceleration -->
         <container size="1">a_lat</container>
@@ -48,14 +81,30 @@
         <container size="1">pitch_now</container>
         <container size="1">roll_now</container>
 
-        <!-- Static Reference Geometry for Visual Gauges -->
+        <!-- Static Geometry for 1:1 Crosshair Gauge -->
         <container size="1" static="true" init="0.0">cursor_zero</container>
-        <container size="2" static="true" init="-10.0,10.0">range_long</container>
-        <container size="2" static="true" init="0.0,0.0">const_zero</container>
-        <container size="2" static="true" init="-1.5,1.5">zone_long</container>
-        <container size="2" static="true" init="-0.8,0.8">tick_short</container>
-        <container size="2" static="true" init="-1.5,-1.5">const_neg15</container>
-        <container size="2" static="true" init="1.5,1.5">const_pos15</container>
+        <container
+            size="2"
+            static="true"
+            init="-10.0, 10.0"
+        >range_long</container>
+        <container size="2" static="true" init="0.0, 0.0">const_zero</container>
+        <container size="2" static="true" init="-1.5, 1.5">zone_long</container>
+        <container
+            size="2"
+            static="true"
+            init="-0.8, 0.8"
+        >tick_short</container>
+        <container
+            size="2"
+            static="true"
+            init="-1.5, -1.5"
+        >const_neg15</container>
+        <container
+            size="2"
+            static="true"
+            init="1.5, 1.5"
+        >const_pos15</container>
     </data-containers>
 
     <input>
@@ -65,156 +114,284 @@
             subscribeOnStart="true"
             autoConnect="true"
         >
-            <output char="12345678-1234-5678-1234-56789abcdef1" offset="0" length="4" conversion="float32LittleEndian">raw_ax</output>
-            <output char="12345678-1234-5678-1234-56789abcdef1" offset="4" length="4" conversion="float32LittleEndian">raw_ay</output>
-            <output char="12345678-1234-5678-1234-56789abcdef1" offset="8" length="4" conversion="float32LittleEndian">raw_az</output>
+            <output
+                char="12345678-1234-5678-1234-56789abcdef1"
+                offset="0"
+                length="2"
+                conversion="int16LittleEndian"
+            >raw_ax</output>
+            <output
+                char="12345678-1234-5678-1234-56789abcdef1"
+                offset="2"
+                length="2"
+                conversion="int16LittleEndian"
+            >raw_ay</output>
+            <output
+                char="12345678-1234-5678-1234-56789abcdef1"
+                offset="4"
+                length="2"
+                conversion="int16LittleEndian"
+            >raw_az</output>
         </bluetooth>
     </input>
 
     <analysis>
-        <!-- ================= 1. LOOKUP TABLE COEFFICIENTS ================= -->
+        <!-- ================= 1. RUNTIME ORIENTATION MATRIX LOOKUP ================= -->
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_lat_x</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_lat_x</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_lat_x</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_lat_z</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_lat_z</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_lat_z</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_long_y</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_long_y</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_long_y</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_long_z</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_long_z</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_long_z</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_vert_x</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_vert_x</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_vert_x</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_vert_y</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_vert_y</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_vert_y</output>
         </interpolate>
         <interpolate>
-            <input as="x">lut_mode</input>
-            <input as="y">lut_vert_z</input>
-            <input as="xi">mount_mode</input>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_vert_z</input>
+            <input as="xi" clear="false">mount_mode</input>
             <output>m_vert_z</output>
         </interpolate>
 
-        <!-- ================= 2. AXIS MATRIX MULTIPLICATION ================= -->
+        <!-- ================= 2. MATRIX MULTIPLICATION ================= -->
         <!-- a_lat = raw_ax*m_lat_x + raw_az*m_lat_z -->
         <formula formula="[1]*[2] + [3]*[4]">
-            <input>raw_ax</input>
-            <input>m_lat_x</input>
-            <input>raw_az</input>
-            <input>m_lat_z</input>
+            <input clear="false">raw_ax</input>
+            <input clear="false">m_lat_x</input>
+            <input clear="false">raw_az</input>
+            <input clear="false">m_lat_z</input>
             <output>a_lat</output>
         </formula>
 
         <!-- a_long = raw_ay*m_long_y + raw_az*m_long_z -->
         <formula formula="[1]*[2] + [3]*[4]">
-            <input>raw_ay</input>
-            <input>m_long_y</input>
-            <input>raw_az</input>
-            <input>m_long_z</input>
+            <input clear="false">raw_ay</input>
+            <input clear="false">m_long_y</input>
+            <input clear="false">raw_az</input>
+            <input clear="false">m_long_z</input>
             <output>a_long</output>
         </formula>
 
         <!-- a_vert = raw_ax*m_vert_x + raw_ay*m_vert_y + raw_az*m_vert_z -->
         <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
-            <input>raw_ax</input>
-            <input>m_vert_x</input>
-            <input>raw_ay</input>
-            <input>m_vert_y</input>
-            <input>raw_az</input>
-            <input>m_vert_z</input>
+            <input clear="false">raw_ax</input>
+            <input clear="false">m_vert_x</input>
+            <input clear="false">raw_ay</input>
+            <input clear="false">m_vert_y</input>
+            <input clear="false">raw_az</input>
+            <input clear="false">m_vert_z</input>
             <output>a_vert</output>
         </formula>
 
-        <!-- ================= 3. PITCH & ROLL TRIGONOMETRY + TARE ================= -->
+        <!-- ================= 3. ANGLE TRIGONOMETRY + TARE ================= -->
         <!-- pitch_calc = atan2(a_long, sqrt(a_lat^2 + a_vert^2)) * 57.29578 -->
         <formula formula="atan2([2], sqrt([1]^2 + [3]^2)) * 57.2957795">
-            <input>a_lat</input>
-            <input>a_long</input>
-            <input>a_vert</input>
+            <input clear="false">a_lat</input>
+            <input clear="false">a_long</input>
+            <input clear="false">a_vert</input>
             <output>pitch_calc</output>
         </formula>
 
         <!-- roll_calc = atan2(-a_lat, a_vert) * 57.29578 -->
         <formula formula="atan2(-[1], [2]) * 57.2957795">
-            <input>a_lat</input>
-            <input>a_vert</input>
+            <input clear="false">a_lat</input>
+            <input clear="false">a_vert</input>
             <output>roll_calc</output>
         </formula>
 
         <!-- pitch_now = pitch_calc - pitch_offset -->
         <formula formula="[1] - [2]">
-            <input>pitch_calc</input>
-            <input>pitch_offset</input>
+            <input clear="false">pitch_calc</input>
+            <input clear="false">pitch_offset</input>
             <output>pitch_now</output>
         </formula>
 
         <!-- roll_now = roll_calc - roll_offset -->
         <formula formula="[1] - [2]">
-            <input>roll_calc</input>
-            <input>roll_offset</input>
+            <input clear="false">roll_calc</input>
+            <input clear="false">roll_offset</input>
             <output>roll_now</output>
         </formula>
     </analysis>
 
     <views>
+        <!-- ================= VIEW 1: LEVEL GAUGES ================= -->
         <view label="Level Gauges">
             <graph
-                label="Leveling Tracks (Pitch = Cyan, Roll = Green)"
+                label="Dual Leveling Tracks (Pitch = Vertical, Roll = Horizontal)"
                 labelX="Roll: Left (-) / Right (+)"
                 labelY="Pitch: Back (-) / Front (+)"
-                unitX="°" unitY="°"
+                unitX="°"
+                unitY="°"
                 aspectRatio="1"
-                scaleMinX="fixed" scaleMaxX="fixed"
-                scaleMinY="fixed" scaleMaxY="fixed"
-                minX="-10.0" maxX="10.0"
-                minY="-10.0" maxY="10.0"
+                scaleMinX="fixed"
+                scaleMaxX="fixed"
+                scaleMinY="fixed"
+                scaleMaxY="fixed"
+                minX="-10.0"
+                maxX="10.0"
+                minY="-10.0"
+                maxY="10.0"
             >
-                <!-- Pitch Track (Vertical - Cyan) -->
-                <input axis="x" color="444444" lineWidth="2" style="lines">const_zero</input>
-                <input axis="y" color="444444" lineWidth="2" style="lines">range_long</input>
-                <input axis="x" color="00e5ff" lineWidth="6" style="lines">const_zero</input>
-                <input axis="y" color="00e5ff" lineWidth="6" style="lines">zone_long</input>
-                <input axis="x" color="00e5ff" lineWidth="2" style="lines">tick_short</input>
-                <input axis="y" color="00e5ff" lineWidth="2" style="lines">const_pos15</input>
-                <input axis="x" color="00e5ff" lineWidth="2" style="lines">tick_short</input>
-                <input axis="y" color="00e5ff" lineWidth="2" style="lines">const_neg15</input>
+                <!-- Pitch Track (Vertical) -->
+                <input
+                    axis="x"
+                    color="444444"
+                    lineWidth="2"
+                    style="lines"
+                >const_zero</input>
+                <input
+                    axis="y"
+                    color="444444"
+                    lineWidth="2"
+                    style="lines"
+                >range_long</input>
 
-                <!-- Roll Track (Horizontal - Green) -->
-                <input axis="x" color="444444" lineWidth="2" style="lines">range_long</input>
-                <input axis="y" color="444444" lineWidth="2" style="lines">const_zero</input>
-                <input axis="x" color="00e676" lineWidth="6" style="lines">zone_long</input>
-                <input axis="y" color="00e676" lineWidth="6" style="lines">const_zero</input>
-                <input axis="x" color="00e676" lineWidth="2" style="lines">const_neg15</input>
-                <input axis="y" color="00e676" lineWidth="2" style="lines">tick_short</input>
-                <input axis="x" color="00e676" lineWidth="2" style="lines">const_pos15</input>
-                <input axis="y" color="00e676" lineWidth="2" style="lines">tick_short</input>
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="6"
+                    style="lines"
+                >const_zero</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="6"
+                    style="lines"
+                >zone_long</input>
+
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >tick_short</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >const_pos15</input>
+
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >tick_short</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >const_neg15</input>
+
+                <!-- Roll Track (Horizontal) -->
+                <input
+                    axis="x"
+                    color="444444"
+                    lineWidth="2"
+                    style="lines"
+                >range_long</input>
+                <input
+                    axis="y"
+                    color="444444"
+                    lineWidth="2"
+                    style="lines"
+                >const_zero</input>
+
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="6"
+                    style="lines"
+                >zone_long</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="6"
+                    style="lines"
+                >const_zero</input>
+
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >const_neg15</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >tick_short</input>
+
+                <input
+                    axis="x"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >const_pos15</input>
+                <input
+                    axis="y"
+                    color="00e676"
+                    lineWidth="2"
+                    style="lines"
+                >tick_short</input>
 
                 <!-- Live Cursors -->
-                <input axis="x" color="00e5ff" lineWidth="14" style="dots">cursor_zero</input>
-                <input axis="y" color="00e5ff" lineWidth="14" style="dots">pitch_now</input>
-                <input axis="x" color="00e676" lineWidth="14" style="dots">roll_now</input>
-                <input axis="y" color="00e676" lineWidth="14" style="dots">cursor_zero</input>
+                <input
+                    axis="x"
+                    color="ff9100"
+                    lineWidth="14"
+                    style="dots"
+                >cursor_zero</input>
+                <input
+                    axis="y"
+                    color="ff9100"
+                    lineWidth="14"
+                    style="dots"
+                >pitch_now</input>
+
+                <input
+                    axis="x"
+                    color="ff9100"
+                    lineWidth="14"
+                    style="dots"
+                >roll_now</input>
+                <input
+                    axis="y"
+                    color="ff9100"
+                    lineWidth="14"
+                    style="dots"
+                >cursor_zero</input>
             </graph>
 
             <value label="Pitch Angle (Front/Back)" unit="°" precision="1">
@@ -224,7 +401,7 @@
                 <input>roll_now</input>
             </value>
 
-            <!-- ================= USER INPUT CONTROLS ================= -->
+            <!-- ================= USER CONTROLS ================= -->
             <dropdown default="1.0" label="Mounting Surface">
                 <output>mount_mode</output>
                 <map value="1.0">1. Floor / Table (Z Up)</map>
@@ -244,6 +421,28 @@
                 <input type="value">0.0</input><output>pitch_offset</output>
                 <input type="value">0.0</input><output>roll_offset</output>
             </button>
+        </view>
+
+        <!-- ================= VIEW 2: RAW SENSOR VALUES ================= -->
+        <view label="Raw Acceleration">
+            <value label="Raw Accel X (raw_ax)" precision="0">
+                <input>raw_ax</input>
+            </value>
+            <value label="Raw Accel Y (raw_ay)" precision="0">
+                <input>raw_ay</input>
+            </value>
+            <value label="Raw Accel Z (raw_az)" precision="0">
+                <input>raw_az</input>
+            </value>
+            <value label="Vehicle Lateral (a_lat)" precision="0">
+                <input>a_lat</input>
+            </value>
+            <value label="Vehicle Longitudinal (a_long)" precision="0">
+                <input>a_long</input>
+            </value>
+            <value label="Vehicle Vertical (a_vert)" precision="0">
+                <input>a_vert</input>
+            </value>
         </view>
     </views>
 </phyphox>

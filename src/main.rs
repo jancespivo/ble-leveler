@@ -157,7 +157,7 @@ const LEVELING_SERVICE_UUID: Uuid = uuid!("12345678-1234-5678-1234-56789abcdef0"
 #[gatt_service(uuid = LEVELING_SERVICE_UUID)]
 struct LevelingService {
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify)]
-    angles: [u8; 12],
+    angles: [u8; 6],
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", write, read)]
     tare_cmd: u8,
 }
@@ -189,17 +189,13 @@ const LSM6DS3_OUTZ_L_XL: u8 = 0x2C;
 const LSM6DS3_OUTZ_H_XL: u8 = 0x2D;
 
 // --- MPU-6500 Reading & Angle Calculations ---
-async fn read_mpu_angles(twi: &mut Twim<'static>) -> (f32, f32, f32) {
+async fn read_raw_accel(twi: &mut Twim<'static>) -> [u8; 6] {
     let mut raw_data = [0u8; 6];
     twi.write_read(LSM6DS3_ADDRESS, &[LSM6DS3_OUTX_L_XL], &mut raw_data)
         .await
         .unwrap();
 
-    let ax = i16::from_le_bytes([raw_data[0], raw_data[1]]) as f32;
-    let ay = i16::from_le_bytes([raw_data[2], raw_data[3]]) as f32;
-    let az = i16::from_le_bytes([raw_data[4], raw_data[5]]) as f32;
-    defmt::info!("{} {} {}", ax, ay, az);
-    (ax, ay, az)
+    raw_data
 }
 
 async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
@@ -307,8 +303,6 @@ async fn main(spawner: Spawner) {
                 .await
                 .unwrap();
 
-            let pitch_offset = 0.0f32;
-            let roll_offset = 0.0f32;
             // Run the GATT event processor and the sensor notification loop concurrently
             let _ = select(
                 // Task A: Process incoming GATT discovery and read/write requests
@@ -322,7 +316,7 @@ async fn main(spawner: Spawner) {
                             GattConnectionEvent::Gatt { event } => {
                                 let mut should_transfer = false;
 
-                                // 1. Inspect the incoming write event
+                                // Inspect the incoming write event
                                 if let GattEvent::Write(write_event) = &event {
                                     if write_event.handle() == server.phyphox.experiment_ctrl.handle
                                     {
@@ -334,10 +328,10 @@ async fn main(spawner: Spawner) {
                                     }
                                 }
 
-                                // 2. Acknowledge and accept the ATT request
+                                // Acknowledge and accept the ATT request
                                 let _ = event.accept();
 
-                                // 3. Execute the async transfer outside the synchronous closure
+                                // Execute the async transfer outside the synchronous closure
                                 if should_transfer {
                                     transfer_phyphox_experiment(&conn, &server).await;
                                 }
@@ -350,15 +344,9 @@ async fn main(spawner: Spawner) {
                 async {
                     loop {
                         embassy_time::Timer::after(Duration::from_millis(50)).await;
-                        let (ax, ay, az) = read_mpu_angles(&mut twi).await;
+                        let raw_data = read_raw_accel(&mut twi).await;
 
-                        // Encode two f32 floats into 8 little-endian bytes
-                        let mut payload = [0u8; 12];
-                        payload[0..4].copy_from_slice(&ax.to_le_bytes());
-                        payload[4..8].copy_from_slice(&ay.to_le_bytes());
-                        payload[8..12].copy_from_slice(&az.to_le_bytes());
-
-                        if let Err(e) = server.leveling.angles.notify(&conn, &payload, false).await
+                        if let Err(e) = server.leveling.angles.notify(&conn, &raw_data, false).await
                         {
                             defmt::warn!("Notify failed: {:?}", defmt::Debug2Format(&e));
                             break;
@@ -393,7 +381,13 @@ async fn advertise<'values, 'server, C: Controller>(
     )?;
     let mut scan_data = [0; 31];
     let scan_len = AdStructure::encode_slice(
-        &[AdStructure::CompleteLocalName(name.as_bytes())],
+        &[
+            AdStructure::CompleteLocalName(name.as_bytes()),
+            AdStructure::CompleteServiceUuids128(&[LEVELING_SERVICE_UUID
+                .as_raw()
+                .try_into()
+                .unwrap()]),
+        ],
         &mut scan_data[..],
     )?;
 
