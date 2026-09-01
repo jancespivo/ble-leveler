@@ -22,16 +22,15 @@ defmt = { version = "1" }
 defmt-rtt = "1"
 
 static_cell = "2"
-cortex-m = { version = "0.7.6" }
-cortex-m-rt = "0.7.0"
+cortex-m = { version = "0.7" }
+cortex-m-rt = "0.7"
 
 # bluetooth
-trouble-host = {version="0.8.0", features=["defmt", "derive", "gatt"]}
-
+trouble-host = {version="0.8", features=["defmt", "derive", "gatt"]}
+btuuid = {version="0.1", features=["uuid"]}
 bt-hci = { version = "0.10.1", default-features = false, features = ["defmt"] }
 libm = "0.2.16"
 micromath = "2.1.0"
-
 # rtc
 # ds323x = "0.6"
 # chrono = { version = "0.4", default-features = false }

@@ -1294,6 +1294,7 @@ name = "leveler"
 version = "0.1.0"
 dependencies = [
  "bt-hci",
+ "btuuid",
  "cortex-m",
  "cortex-m-rt",
  "defmt 1.1.1",
