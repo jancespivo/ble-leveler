@@ -108,13 +108,15 @@
     </data-containers>
 
     <input>
-        <!-- Streaming accelerometer notifications -->
+        <!-- Single BLE device connection handling both notifications and indications -->
         <bluetooth
+            id="leveler"
+            name="Level "
             uuid="a0000001-4493-41db-9609-eb926bd307c7"
-            mode="notification"
             subscribeOnStart="true"
             autoConnect="true"
         >
+            <!-- Streaming accelerometer notifications -->
             <output
                 char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="0"
@@ -133,15 +135,8 @@
                 length="2"
                 conversion="int16LittleEndian"
             >raw_az</output>
-        </bluetooth>
 
-        <!-- Stored configuration indications -->
-        <bluetooth
-            uuid="a0000001-4493-41db-9609-eb926bd307c7"
-            mode="indication"
-            subscribeOnStart="true"
-            autoConnect="true"
-        >
+            <!-- Stored configuration indications -->
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
                 offset="0"
@@ -169,30 +164,26 @@
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
                 offset="10"
-                length="2"
-                factor="0.01"
-                conversion="int16LittleEndian"
+                length="4"
+                conversion="float32LittleEndian"
             >th_front</output>
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
-                offset="12"
-                length="2"
-                factor="0.01"
-                conversion="int16LittleEndian"
+                offset="14"
+                length="4"
+                conversion="float32LittleEndian"
             >th_rear</output>
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
-                offset="14"
-                length="2"
-                factor="0.01"
-                conversion="int16LittleEndian"
+                offset="18"
+                length="4"
+                conversion="float32LittleEndian"
             >th_left</output>
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
-                offset="16"
-                length="2"
-                factor="0.01"
-                conversion="int16LittleEndian"
+                offset="22"
+                length="4"
+                conversion="float32LittleEndian"
             >th_right</output>
         </bluetooth>
     </input>
@@ -658,6 +649,34 @@
             </value>
             <value label="Vehicle Vertical (a_vert)" precision="0">
                 <input>a_vert</input>
+            </value>
+        </view>
+
+        <!-- VIEW 3: STORED CONFIGURATION -->
+        <view label="Device Config">
+            <value label="USB-C Direction (mount_usbc)" precision="0">
+                <input>mount_usbc</input>
+            </value>
+            <value label="Top Label Direction (mount_top)" precision="0">
+                <input>mount_top</input>
+            </value>
+            <value label="Pitch Offset" unit="°" precision="2">
+                <input>pitch_offset</input>
+            </value>
+            <value label="Roll Offset" unit="°" precision="2">
+                <input>roll_offset</input>
+            </value>
+            <value label="Front Threshold" unit="°" precision="2">
+                <input>th_front</input>
+            </value>
+            <value label="Rear Threshold" unit="°" precision="2">
+                <input>th_rear</input>
+            </value>
+            <value label="Left Threshold" unit="°" precision="2">
+                <input>th_left</input>
+            </value>
+            <value label="Right Threshold" unit="°" precision="2">
+                <input>th_right</input>
             </value>
         </view>
     </views>

@@ -3,11 +3,14 @@
 
 use bt_hci::uuid::appearance;
 
+use core::cell::RefCell;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::select;
 use embassy_nrf::rng;
 use embassy_nrf::twim::Twim;
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Duration;
 use static_cell::StaticCell;
 use trouble_host::Address;
@@ -147,9 +150,10 @@ struct LevelingService {
         write,
         write_without_response,
         read,
+        notify,
         indicate
     )]
-    config: [u8; 18],
+    config: [u8; 26],
 }
 
 #[gatt_server]
@@ -186,63 +190,89 @@ impl DeviceConfig {
         th_right: 1.5,
     };
 
-    // The BLE write payload limit without MTU exchange is 20 bytes.
-    // We scale thresholds to centidegrees (i16) to fit the whole structure into 18 bytes.
-    pub fn to_bytes(&self) -> [u8; 18] {
-        let mut bytes = [0u8; 18];
+    pub fn to_bytes(&self) -> [u8; 26] {
+        let mut bytes = [0u8; 26];
         bytes[0] = self.usbc_dir;
         bytes[1] = self.top_dir;
         bytes[2..6].copy_from_slice(&self.pitch_offset.to_le_bytes());
         bytes[6..10].copy_from_slice(&self.roll_offset.to_le_bytes());
-        let f = (self.th_front * 100.0) as i16;
-        let r = (self.th_rear * 100.0) as i16;
-        let l = (self.th_left * 100.0) as i16;
-        let rg = (self.th_right * 100.0) as i16;
-        bytes[10..12].copy_from_slice(&f.to_le_bytes());
-        bytes[12..14].copy_from_slice(&r.to_le_bytes());
-        bytes[14..16].copy_from_slice(&l.to_le_bytes());
-        bytes[16..18].copy_from_slice(&rg.to_le_bytes());
+        bytes[10..14].copy_from_slice(&self.th_front.to_le_bytes());
+        bytes[14..18].copy_from_slice(&self.th_rear.to_le_bytes());
+        bytes[18..22].copy_from_slice(&self.th_left.to_le_bytes());
+        bytes[22..26].copy_from_slice(&self.th_right.to_le_bytes());
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 18 {
-            return None;
+        if bytes.len() >= 26 {
+            let usbc_dir = bytes[0];
+            let top_dir = bytes[1];
+            if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
+                return None;
+            }
+            let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+            let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
+
+            let f = f32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]);
+            let r = f32::from_le_bytes([bytes[14], bytes[15], bytes[16], bytes[17]]);
+            let l = f32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]);
+            let rg = f32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]);
+
+            let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
+            let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
+            let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
+            let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
+
+            Some(Self {
+                usbc_dir,
+                top_dir,
+                pitch_offset,
+                roll_offset,
+                th_front,
+                th_rear,
+                th_left,
+                th_right,
+            })
+        } else if bytes.len() == 18 {
+            // Backward Compatibility: Decode legacy 18-byte format (thresholds scaled in centidegrees).
+            let usbc_dir = bytes[0];
+            let top_dir = bytes[1];
+            if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
+                return None;
+            }
+            let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+            let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
+
+            let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
+            let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
+            let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
+            let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
+
+            let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
+            let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
+            let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
+            let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
+
+            Some(Self {
+                usbc_dir,
+                top_dir,
+                pitch_offset,
+                roll_offset,
+                th_front,
+                th_rear,
+                th_left,
+                th_right,
+            })
+        } else {
+            None
         }
-        let usbc_dir = bytes[0];
-        let top_dir = bytes[1];
-        if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
-            return None;
-        }
-        let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
-        let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
-
-        let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
-        let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
-        let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
-        let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
-
-        let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
-        let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
-        let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
-        let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
-
-        Some(Self {
-            usbc_dir,
-            top_dir,
-            pitch_offset,
-            roll_offset,
-            th_front,
-            th_rear,
-            th_left,
-            th_right,
-        })
     }
 }
 
 async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
     let mut buf = [0u8; 64];
-    let res = sequential_storage::map::fetch_item::<u8, [u8; 18], _>(
+    // Defensive Logic: fetch as slice &[u8] because sequential-storage panics on fixed array size mismatch.
+    let res = sequential_storage::map::fetch_item::<u8, &[u8], _>(
         flash,
         STORAGE_RANGE,
         &mut sequential_storage::cache::NoCache::new(),
@@ -253,7 +283,7 @@ async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
 
     match res {
         Ok(Some(bytes)) => {
-            if let Some(cfg) = DeviceConfig::from_bytes(&bytes) {
+            if let Some(cfg) = DeviceConfig::from_bytes(bytes) {
                 defmt::info!(
                     "Loaded config from flash -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
                     cfg.usbc_dir,
@@ -284,13 +314,13 @@ async fn save_config<'d>(flash: &mut nrf_mpsl::Flash<'d>, config: &DeviceConfig)
     // Retry with delay when ongoing BLE activity causes temporary ENOMEM errors.
     for attempt in 1..=5 {
         let mut buf = [0u8; 64];
-        let res = sequential_storage::map::store_item::<u8, [u8; 18], _>(
+        let res = sequential_storage::map::store_item::<u8, &[u8], _>(
             flash,
             STORAGE_RANGE,
             &mut sequential_storage::cache::NoCache::new(),
             &mut buf,
             &CONFIG_KEY,
-            &bytes,
+            &&bytes[..],
         )
         .await;
 
@@ -394,7 +424,8 @@ async fn main(spawner: Spawner) {
     ));
 
     let mut flash = nrf_mpsl::Flash::take(mpsl, p.NVMC);
-    let mut dev_config = load_config(&mut flash).await;
+    let dev_config =
+        Mutex::<CriticalSectionRawMutex, _>::new(RefCell::new(load_config(&mut flash).await));
 
     defmt::info!("BLE prepared");
     spawner.spawn(defmt::unwrap!(mpsl_task(&*mpsl)));
@@ -450,7 +481,10 @@ async fn main(spawner: Spawner) {
     }))
     .unwrap();
 
-    let _ = server.set(&server.leveling.config, &dev_config.to_bytes());
+    let _ = server.set(
+        &server.leveling.config,
+        &dev_config.lock(|c| c.borrow().to_bytes()),
+    );
 
     let _ = join(ble_task(runner), async {
         loop {
@@ -470,36 +504,38 @@ async fn main(spawner: Spawner) {
                             GattConnectionEvent::Gatt { event } => {
                                 let mut should_transfer = false;
                                 let mut new_config: Option<DeviceConfig> = None;
+                                let mut send_config = false;
 
                                 if let GattEvent::Read(read_event) = &event {
                                     if read_event.handle() == server.leveling.config.handle {
+                                        let cfg = dev_config.lock(|c| *c.borrow());
                                         defmt::info!(
                                             "Phone read config -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
-                                            dev_config.usbc_dir,
-                                            dev_config.top_dir,
-                                            dev_config.pitch_offset,
-                                            dev_config.roll_offset,
-                                            dev_config.th_front,
-                                            dev_config.th_rear,
-                                            dev_config.th_left,
-                                            dev_config.th_right
+                                            cfg.usbc_dir,
+                                            cfg.top_dir,
+                                            cfg.pitch_offset,
+                                            cfg.roll_offset,
+                                            cfg.th_front,
+                                            cfg.th_rear,
+                                            cfg.th_left,
+                                            cfg.th_right
                                         );
                                     }
                                 }
 
                                 if let GattEvent::Write(write_event) = &event {
-                                    if write_event.handle() == server.phyphox.experiment_ctrl.handle
-                                    {
+                                    let handle = write_event.handle();
+                                    if handle == server.phyphox.experiment_ctrl.handle {
                                         write_event.with_data(|_offset, data| {
                                             if data.first() == Some(&1) {
                                                 should_transfer = true;
                                             }
                                         });
-                                    } else if write_event.handle() == server.leveling.config.handle
-                                    {
+                                    } else if handle == server.leveling.config.handle {
                                         write_event.with_data(|offset, data| {
                                             if let Some(cfg) = DeviceConfig::from_bytes(data) {
-                                                if cfg != dev_config {
+                                                let current_cfg = dev_config.lock(|c| *c.borrow());
+                                                if cfg != current_cfg {
                                                     defmt::info!(
                                                         "Phone wrote new config (offset: {}, len: {}): {=[u8]}",
                                                         offset,
@@ -528,25 +564,57 @@ async fn main(spawner: Spawner) {
                                                 );
                                             }
                                         });
+                                    } else if Some(handle) == server.phyphox.experiment_data.cccd_handle {
+                                        write_event.with_data(|_offset, data| {
+                                            let subscribed = data.iter().any(|&b| b != 0);
+                                            defmt::info!("CCCD write on phyphox experiment_data (subscribed: {})", subscribed);
+                                            if subscribed {
+                                                should_transfer = true;
+                                            }
+                                        });
+                                    } else if Some(handle) == server.leveling.config.cccd_handle {
+                                        write_event.with_data(|_offset, data| {
+                                            let subscribed = data.iter().any(|&b| b != 0);
+                                            defmt::info!("CCCD write on leveling config (subscribed: {})", subscribed);
+                                            if subscribed {
+                                                send_config = true;
+                                            }
+                                        });
+                                    } else if Some(handle) == server.leveling.angles.cccd_handle {
+                                        write_event.with_data(|_offset, data| {
+                                            let subscribed = data.iter().any(|&b| b != 0);
+                                            defmt::info!("CCCD write on leveling angles (subscribed: {})", subscribed);
+                                            if subscribed {
+                                                send_config = true;
+                                            }
+                                        });
                                     }
                                 }
 
                                 let _ = event.accept();
 
+                                if send_config {
+                                    let cfg_bytes = dev_config.lock(|c| c.borrow().to_bytes());
+                                    defmt::info!("Sending configuration on characteristic subscription...");
+                                    let _ = server.leveling.config.indicate(&conn, &cfg_bytes, false).await;
+                                    let _ = server.leveling.config.notify(&conn, &cfg_bytes, false).await;
+                                }
+
                                 if should_transfer {
                                     transfer_phyphox_experiment(&conn, &server).await;
-                                    // Send stored flash configuration indication after XML transfer completes
-                                    embassy_time::Timer::after(Duration::from_millis(150)).await;
-                                    let _ = server.leveling.config.indicate(&conn, &dev_config.to_bytes(), false).await;
                                 }
 
                                 if let Some(cfg) = new_config {
                                     // Save only when values change to prevent redundant flash operations and event loop blocking.
-                                    if cfg != dev_config {
-                                        dev_config = cfg;
-                                        let _ = server.set(&server.leveling.config, &dev_config.to_bytes());
-                                        save_config(&mut flash, &dev_config).await;
-                                        let _ = server.leveling.config.indicate(&conn, &dev_config.to_bytes(), false).await;
+                                    let current_cfg = dev_config.lock(|c| *c.borrow());
+                                    if cfg != current_cfg {
+                                        dev_config.lock(|c| *c.borrow_mut() = cfg);
+                                        let cfg_bytes = cfg.to_bytes();
+                                        let _ = server.set(&server.leveling.config, &cfg_bytes);
+                                        save_config(&mut flash, &cfg).await;
+                                        defmt::info!("Sending updated config to client: {:?}", cfg);
+                                        let _ = server.leveling.config.indicate(&conn, &cfg_bytes, false).await;
+                                        let _ = server.leveling.config.notify(&conn, &cfg_bytes, false).await;
                                     }
                                 }
                             }
