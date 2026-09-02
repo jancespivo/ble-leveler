@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::ops::Deref;
-
 use bt_hci::uuid::appearance;
 
 use embassy_executor::Spawner;
@@ -16,7 +14,6 @@ use trouble_host::Address;
 
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::peripherals::TWISPI1;
-use micromath::F32Ext;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use trouble_host::BleHostError;
@@ -78,7 +75,8 @@ fn build_sdc<'d, const N: usize>(
         .build(p, rng, mpsl, mem)
 }
 
-const PHYPHOX_EXPERIMENT: &[u8] = include_bytes!("../leveling.phyphox");
+const PHYPHOX_EXPERIMENT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/leveling.zip"));
+
 const PHYPHOX_SERVICE_UUID: Uuid = uuid!("cddf0001-30f7-4671-8b43-5e40ba53514a");
 #[gatt_service(uuid = PHYPHOX_SERVICE_UUID)]
 struct PhyphoxService {

@@ -2,7 +2,7 @@
     <title>Campervan Leveling</title>
     <category>Campervan Tools</category>
     <description
-    >Dual-Axis Crosshair Gauge with 6-Surface Mounting Selector</description>
+    >Dual-Axis Crosshair Gauge with Matched Color Coding</description>
 
     <data-containers>
         <!-- Raw Accelerometer Inputs (6 bytes int16 from BLE) -->
@@ -136,7 +136,7 @@
     </input>
 
     <analysis>
-        <!-- ================= 1. RUNTIME ORIENTATION MATRIX LOOKUP ================= -->
+        <!-- ================= 1. RUNTIME MATRIX LOOKUP ================= -->
         <interpolate>
             <input as="x" clear="false">lut_mode</input>
             <input as="y" clear="false">lut_lat_x</input>
@@ -181,7 +181,6 @@
         </interpolate>
 
         <!-- ================= 2. MATRIX MULTIPLICATION ================= -->
-        <!-- a_lat = raw_ax*m_lat_x + raw_az*m_lat_z -->
         <formula formula="[1]*[2] + [3]*[4]">
             <input clear="false">raw_ax</input>
             <input clear="false">m_lat_x</input>
@@ -190,7 +189,6 @@
             <output>a_lat</output>
         </formula>
 
-        <!-- a_long = raw_ay*m_long_y + raw_az*m_long_z -->
         <formula formula="[1]*[2] + [3]*[4]">
             <input clear="false">raw_ay</input>
             <input clear="false">m_long_y</input>
@@ -199,7 +197,6 @@
             <output>a_long</output>
         </formula>
 
-        <!-- a_vert = raw_ax*m_vert_x + raw_ay*m_vert_y + raw_az*m_vert_z -->
         <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
             <input clear="false">raw_ax</input>
             <input clear="false">m_vert_x</input>
@@ -210,8 +207,7 @@
             <output>a_vert</output>
         </formula>
 
-        <!-- ================= 3. ANGLE TRIGONOMETRY + TARE ================= -->
-        <!-- pitch_calc = atan2(a_long, sqrt(a_lat^2 + a_vert^2)) * 57.29578 -->
+        <!-- ================= 3. TRIGONOMETRY + TARE ================= -->
         <formula formula="atan2([2], sqrt([1]^2 + [3]^2)) * 57.2957795">
             <input clear="false">a_lat</input>
             <input clear="false">a_long</input>
@@ -219,21 +215,18 @@
             <output>pitch_calc</output>
         </formula>
 
-        <!-- roll_calc = atan2(-a_lat, a_vert) * 57.29578 -->
         <formula formula="atan2(-[1], [2]) * 57.2957795">
             <input clear="false">a_lat</input>
             <input clear="false">a_vert</input>
             <output>roll_calc</output>
         </formula>
 
-        <!-- pitch_now = pitch_calc - pitch_offset -->
         <formula formula="[1] - [2]">
             <input clear="false">pitch_calc</input>
             <input clear="false">pitch_offset</input>
             <output>pitch_now</output>
         </formula>
 
-        <!-- roll_now = roll_calc - roll_offset -->
         <formula formula="[1] - [2]">
             <input clear="false">roll_calc</input>
             <input clear="false">roll_offset</input>
@@ -242,10 +235,10 @@
     </analysis>
 
     <views>
-        <!-- ================= VIEW 1: LEVEL GAUGES ================= -->
+        <!-- ================= VIEW 1: DUAL-AXIS LEVEL GAUGES ================= -->
         <view label="Level Gauges">
             <graph
-                label="Dual Leveling Tracks (Pitch = Vertical, Roll = Horizontal)"
+                label="Leveling Tracks (Pitch = Cyan, Roll = Green)"
                 labelX="Roll: Left (-) / Right (+)"
                 labelY="Pitch: Back (-) / Front (+)"
                 unitX="°"
@@ -260,7 +253,8 @@
                 minY="-10.0"
                 maxY="10.0"
             >
-                <!-- Pitch Track (Vertical) -->
+                <!-- ================= VERTICAL PITCH SYSTEM (CYAN) ================= -->
+                <!-- Pitch main rail (Gray) -->
                 <input
                     axis="x"
                     color="444444"
@@ -274,46 +268,50 @@
                     style="lines"
                 >range_long</input>
 
+                <!-- Pitch comfort zone (Thick Cyan line: +/-1.5°) -->
                 <input
                     axis="x"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="6"
                     style="lines"
                 >const_zero</input>
                 <input
                     axis="y"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="6"
                     style="lines"
                 >zone_long</input>
 
+                <!-- Pitch +1.5° threshold tick (Cyan) -->
                 <input
                     axis="x"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="2"
                     style="lines"
                 >tick_short</input>
                 <input
                     axis="y"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="2"
                     style="lines"
                 >const_pos15</input>
 
+                <!-- Pitch -1.5° threshold tick (Cyan) -->
                 <input
                     axis="x"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="2"
                     style="lines"
                 >tick_short</input>
                 <input
                     axis="y"
-                    color="00e676"
+                    color="00e5ff"
                     lineWidth="2"
                     style="lines"
                 >const_neg15</input>
 
-                <!-- Roll Track (Horizontal) -->
+                <!-- ================= HORIZONTAL ROLL SYSTEM (GREEN) ================= -->
+                <!-- Roll main rail (Gray) -->
                 <input
                     axis="x"
                     color="444444"
@@ -327,6 +325,7 @@
                     style="lines"
                 >const_zero</input>
 
+                <!-- Roll comfort zone (Thick Green line: +/-1.5°) -->
                 <input
                     axis="x"
                     color="00e676"
@@ -340,6 +339,7 @@
                     style="lines"
                 >const_zero</input>
 
+                <!-- Roll -1.5° threshold tick (Green) -->
                 <input
                     axis="x"
                     color="00e676"
@@ -353,6 +353,7 @@
                     style="lines"
                 >tick_short</input>
 
+                <!-- Roll +1.5° threshold tick (Green) -->
                 <input
                     axis="x"
                     color="00e676"
@@ -366,29 +367,31 @@
                     style="lines"
                 >tick_short</input>
 
-                <!-- Live Cursors -->
+                <!-- ================= LIVE CURSORS (COLOR MATCHED) ================= -->
+                <!-- Pitch Cursor: Slides vertically (Cyan Dot) -->
                 <input
                     axis="x"
-                    color="ff9100"
+                    color="00e5ff"
                     lineWidth="14"
                     style="dots"
                 >cursor_zero</input>
                 <input
                     axis="y"
-                    color="ff9100"
+                    color="00e5ff"
                     lineWidth="14"
                     style="dots"
                 >pitch_now</input>
 
+                <!-- Roll Cursor: Slides horizontally (Green Dot) -->
                 <input
                     axis="x"
-                    color="ff9100"
+                    color="00e676"
                     lineWidth="14"
                     style="dots"
                 >roll_now</input>
                 <input
                     axis="y"
-                    color="ff9100"
+                    color="00e676"
                     lineWidth="14"
                     style="dots"
                 >cursor_zero</input>

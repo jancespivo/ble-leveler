@@ -37,7 +37,7 @@ micromath = "2.1.0"
 
 
 [build-dependencies]
-reqwest = { version = "0.13", features = ["blocking"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
 [profile.dev]
 # Rust debug is too slow.

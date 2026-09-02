@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
+    zip_leveling_phyphox();
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
@@ -32,4 +33,31 @@ fn main() {
     println!("cargo::rustc-link-arg-bins=--nmagic");
     println!("cargo::rustc-link-arg-bins=-Tlink.x");
     println!("cargo::rustc-link-arg-bins=-Tdefmt.x");
+}
+
+use std::io::Read;
+use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
+
+fn zip_leveling_phyphox() {
+    // Re-run this build script if leveling.phyphox changes
+    println!("cargo:rerun-if-changed=leveling.phyphox");
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let zip_path = out_dir.join("leveling.zip");
+
+    // Read the XML file
+    let mut xml_file = File::open("leveling.phyphox").expect("Failed to open leveling.phyphox");
+    let mut xml_data = Vec::new();
+    xml_file.read_to_end(&mut xml_data).unwrap();
+
+    // Create the ZIP archive
+    let zip_file = File::create(&zip_path).expect("Failed to create ZIP output");
+    let mut zip = ZipWriter::new(zip_file);
+
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    zip.start_file("leveling.phyphox", options).unwrap();
+    zip.write_all(&xml_data).unwrap();
+    zip.finish().unwrap();
 }
