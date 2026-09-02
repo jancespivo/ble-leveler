@@ -455,14 +455,13 @@ async fn main(spawner: Spawner) {
 
     const HEX_CHARS: &[u8; 16] = b"0123456789ABCDEF";
     let dev_id = embassy_nrf::pac::FICR.deviceid(0).read();
-    static DEVICE_NAME_BUF: static_cell::ConstStaticCell<[u8; 10]> =
-        static_cell::ConstStaticCell::new([0; 10]);
+    static DEVICE_NAME_BUF: static_cell::ConstStaticCell<[u8; 11]> =
+        static_cell::ConstStaticCell::new([0; 11]);
     let name_buf = DEVICE_NAME_BUF.take();
-    name_buf[0..6].copy_from_slice(b"Level ");
-    name_buf[6] = HEX_CHARS[((dev_id >> 12) & 0xF) as usize];
-    name_buf[7] = HEX_CHARS[((dev_id >> 8) & 0xF) as usize];
-    name_buf[8] = HEX_CHARS[((dev_id >> 4) & 0xF) as usize];
-    name_buf[9] = HEX_CHARS[(dev_id & 0xF) as usize];
+    name_buf[0..8].copy_from_slice(b"Leveler ");
+    name_buf[8] = HEX_CHARS[((dev_id >> 8) & 0xF) as usize];
+    name_buf[9] = HEX_CHARS[((dev_id >> 4) & 0xF) as usize];
+    name_buf[10] = HEX_CHARS[(dev_id & 0xF) as usize];
     let device_name: &'static str = core::str::from_utf8(name_buf).unwrap();
     defmt::info!("Broadcasting device name: {}", device_name);
 
