@@ -111,7 +111,6 @@
         <!-- Single BLE device connection handling both notifications and indications -->
         <bluetooth
             id="leveler"
-            name="Level "
             uuid="a0000001-4493-41db-9609-eb926bd307c7"
             mtu="128"
             subscribeOnStart="true"
@@ -193,7 +192,6 @@
         <!-- Transmit updated configuration back to the device upon user modifications -->
         <bluetooth
             id="leveler"
-            name="Level "
             uuid="a0000001-4493-41db-9609-eb926bd307c7"
             mtu="128"
             autoConnect="true"
@@ -681,56 +679,6 @@
                 <input type="value">0.0</input><output>pitch_offset</output>
                 <input type="value">0.0</input><output>roll_offset</output>
             </button>
-        </view>
-
-        <!-- VIEW 2: RAW ACCELERATION VALUES -->
-        <view label="Raw Acceleration">
-            <value label="Raw Accel X (raw_ax)" precision="0">
-                <input>raw_ax</input>
-            </value>
-            <value label="Raw Accel Y (raw_ay)" precision="0">
-                <input>raw_ay</input>
-            </value>
-            <value label="Raw Accel Z (raw_az)" precision="0">
-                <input>raw_az</input>
-            </value>
-            <value label="Vehicle Lateral (a_lat)" precision="0">
-                <input>a_lat</input>
-            </value>
-            <value label="Vehicle Longitudinal (a_long)" precision="0">
-                <input>a_long</input>
-            </value>
-            <value label="Vehicle Vertical (a_vert)" precision="0">
-                <input>a_vert</input>
-            </value>
-        </view>
-
-        <!-- VIEW 3: STORED CONFIGURATION -->
-        <view label="Device Config">
-            <value label="USB-C Direction (mount_usbc)" precision="0">
-                <input>mount_usbc</input>
-            </value>
-            <value label="Top Label Direction (mount_top)" precision="0">
-                <input>mount_top</input>
-            </value>
-            <value label="Pitch Offset" unit="°" precision="2">
-                <input>pitch_offset</input>
-            </value>
-            <value label="Roll Offset" unit="°" precision="2">
-                <input>roll_offset</input>
-            </value>
-            <value label="Front Threshold" unit="°" precision="2">
-                <input>th_front</input>
-            </value>
-            <value label="Rear Threshold" unit="°" precision="2">
-                <input>th_rear</input>
-            </value>
-            <value label="Left Threshold" unit="°" precision="2">
-                <input>th_left</input>
-            </value>
-            <value label="Right Threshold" unit="°" precision="2">
-                <input>th_right</input>
-            </value>
         </view>
     </views>
 </phyphox>
