@@ -1,8 +1,7 @@
 <phyphox version="1.19">
     <title>Campervan Leveling</title>
     <category>Campervan Tools</category>
-    <description
-    >Dual-Axis Crosshair Gauge with Matched Color Coding</description>
+    <description>Dual-Axis Crosshair Gauge with Dynamic Sensor Orientation</description>
 
     <data-containers>
         <!-- Raw Accelerometer Inputs (6 bytes int16 from BLE) -->
@@ -10,61 +9,42 @@
         <container size="1">raw_ay</container>
         <container size="1">raw_az</container>
 
-        <!-- Dropdown Selection: 1.0 to 6.0 (Default 1.0 = Floor) -->
-        <container size="1" init="1.0">mount_mode</container>
+        <!-- Dropdowns: 1.0=Front, 2.0=Rear, 3.0=Left, 4.0=Right, 5.0=Up, 6.0=Down -->
+        <!-- Default: USB-C points Rear (2.0), Top Label points Up (5.0) -->
+        <container size="1" init="2.0">mount_usbc</container>
+        <container size="1" init="5.0">mount_top</container>
 
-        <!-- Lookup Tables for 6 Cube Mounting Surfaces -->
-        <container
-            size="6"
-            static="true"
-            init="1.0, 2.0, 3.0, 4.0, 5.0, 6.0"
-        >lut_mode</container>
-        <container
-            size="6"
-            static="true"
-            init="1.0, -1.0, 1.0, -1.0, 0.0, 0.0"
-        >lut_lat_x</container>
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, 0.0, 0.0, -1.0, 1.0"
-        >lut_lat_z</container>
+        <!-- Lookup Tables for 6 Orthogonal Cardinal Directions -->
+        <!-- Mode index: 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 -->
+        <container size="6" static="true" init="1.0, 2.0, 3.0, 4.0, 5.0, 6.0">lut_mode</container>
+        <container size="6" static="true" init="0.0, 0.0, -1.0, 1.0, 0.0, 0.0">lut_dir_x</container>
+        <container size="6" static="true" init="1.0, -1.0, 0.0, 0.0, 0.0, 0.0">lut_dir_y</container>
+        <container size="6" static="true" init="0.0, 0.0, 0.0, 0.0, 1.0, -1.0">lut_dir_z</container>
 
-        <container
-            size="6"
-            static="true"
-            init="1.0, 1.0, 0.0, 0.0, 1.0, 1.0"
-        >lut_long_y</container>
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, -1.0, 1.0, 0.0, 0.0"
-        >lut_long_z</container>
+        <!-- Unit vectors for USB-C and Top Label in vehicle frame -->
+        <container size="1">u_usbc_x</container>
+        <container size="1">u_usbc_y</container>
+        <container size="1">u_usbc_z</container>
+        <container size="1">u_top_x</container>
+        <container size="1">u_top_y</container>
+        <container size="1">u_top_z</container>
 
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, 0.0, 0.0, 1.0, -1.0"
-        >lut_vert_x</container>
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, 1.0, -1.0, 0.0, 0.0"
-        >lut_vert_y</container>
-        <container
-            size="6"
-            static="true"
-            init="1.0, -1.0, 0.0, 0.0, 0.0, 0.0"
-        >lut_vert_z</container>
+        <!-- Sensor coordinate basis vectors in vehicle frame -->
+        <!-- Physical Board Alignment: USB-C is along -X_s, Top is +Z_s, Lateral is +Y_s -->
+        <!-- Sensor X is opposite of USB-C vector: X_s = -u_usbc -->
+        <container size="1">x_sx</container>
+        <container size="1">x_sy</container>
+        <container size="1">x_sz</container>
 
-        <!-- Dynamic Matrix Coefficients -->
-        <container size="1" init="1.0">m_lat_x</container>
-        <container size="1" init="0.0">m_lat_z</container>
-        <container size="1" init="1.0">m_long_y</container>
-        <container size="1" init="0.0">m_long_z</container>
-        <container size="1" init="0.0">m_vert_x</container>
-        <container size="1" init="0.0">m_vert_y</container>
-        <container size="1" init="1.0">m_vert_z</container>
+        <!-- Sensor Z is Top Label vector: Z_s = u_top -->
+        <container size="1">z_sx</container>
+        <container size="1">z_sy</container>
+        <container size="1">z_sz</container>
+
+        <!-- Sensor Y is cross product (u_usbc x u_top) -->
+        <container size="1">y_sx</container>
+        <container size="1">y_sy</container>
+        <container size="1">y_sz</container>
 
         <!-- Remapped Vehicle Acceleration -->
         <container size="1">a_lat</container>
@@ -83,51 +63,35 @@
 
         <!-- Static Geometry for 1:1 Crosshair Gauge -->
         <container size="1" static="true" init="0.0">cursor_zero</container>
-        <container
-            size="2"
-            static="true"
-            init="-10.0, 10.0"
-        >range_long</container>
+        <container size="2" static="true" init="-10.0, 10.0">range_long</container>
         <container size="2" static="true" init="0.0, 0.0">const_zero</container>
         <container size="2" static="true" init="-1.5, 1.5">zone_long</container>
-        <container
-            size="2"
-            static="true"
-            init="-0.8, 0.8"
-        >tick_short</container>
-        <container
-            size="2"
-            static="true"
-            init="-1.5, -1.5"
-        >const_neg15</container>
-        <container
-            size="2"
-            static="true"
-            init="1.5, 1.5"
-        >const_pos15</container>
+        <container size="2" static="true" init="-0.8, 0.8">tick_short</container>
+        <container size="2" static="true" init="-1.5, -1.5">const_neg15</container>
+        <container size="2" static="true" init="1.5, 1.5">const_pos15</container>
     </data-containers>
 
     <input>
         <bluetooth
-            uuid="12345678-1234-5678-1234-56789abcdef0"
+            uuid="a0000001-4493-41db-9609-eb926bd307c7"
             mode="notification"
             subscribeOnStart="true"
             autoConnect="true"
         >
             <output
-                char="12345678-1234-5678-1234-56789abcdef1"
+                char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="0"
                 length="2"
                 conversion="int16LittleEndian"
             >raw_ax</output>
             <output
-                char="12345678-1234-5678-1234-56789abcdef1"
+                char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="2"
                 length="2"
                 conversion="int16LittleEndian"
             >raw_ay</output>
             <output
-                char="12345678-1234-5678-1234-56789abcdef1"
+                char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="4"
                 length="2"
                 conversion="int16LittleEndian"
@@ -136,79 +100,129 @@
     </input>
 
     <analysis>
-        <!-- ================= 1. RUNTIME MATRIX LOOKUP ================= -->
+        <!-- 1. Interpolate USB-C Direction Vector -->
         <interpolate>
             <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_lat_x</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_lat_x</output>
+            <input as="y" clear="false">lut_dir_x</input>
+            <input as="xi" clear="false">mount_usbc</input>
+            <output>u_usbc_x</output>
         </interpolate>
         <interpolate>
             <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_lat_z</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_lat_z</output>
+            <input as="y" clear="false">lut_dir_y</input>
+            <input as="xi" clear="false">mount_usbc</input>
+            <output>u_usbc_y</output>
         </interpolate>
         <interpolate>
             <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_long_y</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_long_y</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_long_z</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_long_z</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_vert_x</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_vert_x</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_vert_y</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_vert_y</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_vert_z</input>
-            <input as="xi" clear="false">mount_mode</input>
-            <output>m_vert_z</output>
+            <input as="y" clear="false">lut_dir_z</input>
+            <input as="xi" clear="false">mount_usbc</input>
+            <output>u_usbc_z</output>
         </interpolate>
 
-        <!-- ================= 2. MATRIX MULTIPLICATION ================= -->
-        <formula formula="[1]*[2] + [3]*[4]">
-            <input clear="false">raw_ax</input>
-            <input clear="false">m_lat_x</input>
-            <input clear="false">raw_az</input>
-            <input clear="false">m_lat_z</input>
-            <output>a_lat</output>
+        <!-- 2. Interpolate Top Label Direction Vector -->
+        <interpolate>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_dir_x</input>
+            <input as="xi" clear="false">mount_top</input>
+            <output>u_top_x</output>
+        </interpolate>
+        <interpolate>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_dir_y</input>
+            <input as="xi" clear="false">mount_top</input>
+            <output>u_top_y</output>
+        </interpolate>
+        <interpolate>
+            <input as="x" clear="false">lut_mode</input>
+            <input as="y" clear="false">lut_dir_z</input>
+            <input as="xi" clear="false">mount_top</input>
+            <output>u_top_z</output>
+        </interpolate>
+
+        <!-- 3. Sensor X Basis Vector (X_s = -u_usbc) -->
+        <formula formula="-[1]">
+            <input clear="false">u_usbc_x</input>
+            <output>x_sx</output>
+        </formula>
+        <formula formula="-[1]">
+            <input clear="false">u_usbc_y</input>
+            <output>x_sy</output>
+        </formula>
+        <formula formula="-[1]">
+            <input clear="false">u_usbc_z</input>
+            <output>x_sz</output>
         </formula>
 
-        <formula formula="[1]*[2] + [3]*[4]">
-            <input clear="false">raw_ay</input>
-            <input clear="false">m_long_y</input>
-            <input clear="false">raw_az</input>
-            <input clear="false">m_long_z</input>
-            <output>a_long</output>
+        <!-- 4. Sensor Z Basis Vector (Z_s = u_top) -->
+        <formula formula="[1]">
+            <input clear="false">u_top_x</input>
+            <output>z_sx</output>
+        </formula>
+        <formula formula="[1]">
+            <input clear="false">u_top_y</input>
+            <output>z_sy</output>
+        </formula>
+        <formula formula="[1]">
+            <input clear="false">u_top_z</input>
+            <output>z_sz</output>
         </formula>
 
+        <!-- 5. Sensor Y Basis Vector (Y_s = u_usbc x u_top) -->
+        <formula formula="[1]*[2] - [3]*[4]">
+            <input clear="false">u_usbc_y</input>
+            <input clear="false">u_top_z</input>
+            <input clear="false">u_usbc_z</input>
+            <input clear="false">u_top_y</input>
+            <output>y_sx</output>
+        </formula>
+        <formula formula="[1]*[2] - [3]*[4]">
+            <input clear="false">u_usbc_z</input>
+            <input clear="false">u_top_x</input>
+            <input clear="false">u_usbc_x</input>
+            <input clear="false">u_top_z</input>
+            <output>y_sy</output>
+        </formula>
+        <formula formula="[1]*[2] - [3]*[4]">
+            <input clear="false">u_usbc_x</input>
+            <input clear="false">u_top_y</input>
+            <input clear="false">u_usbc_y</input>
+            <input clear="false">u_top_x</input>
+            <output>y_sz</output>
+        </formula>
+
+        <!-- 6. Vehicle Frame Coordinate Transformation -->
         <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
             <input clear="false">raw_ax</input>
-            <input clear="false">m_vert_x</input>
+            <input clear="false">x_sx</input>
             <input clear="false">raw_ay</input>
-            <input clear="false">m_vert_y</input>
+            <input clear="false">y_sx</input>
             <input clear="false">raw_az</input>
-            <input clear="false">m_vert_z</input>
+            <input clear="false">z_sx</input>
+            <output>a_lat</output>
+        </formula>
+        <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
+            <input clear="false">raw_ax</input>
+            <input clear="false">x_sy</input>
+            <input clear="false">raw_ay</input>
+            <input clear="false">y_sy</input>
+            <input clear="false">raw_az</input>
+            <input clear="false">z_sy</input>
+            <output>a_long</output>
+        </formula>
+        <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
+            <input clear="false">raw_ax</input>
+            <input clear="false">x_sz</input>
+            <input clear="false">raw_ay</input>
+            <input clear="false">y_sz</input>
+            <input clear="false">raw_az</input>
+            <input clear="false">z_sz</input>
             <output>a_vert</output>
         </formula>
 
-        <!-- ================= 3. TRIGONOMETRY + TARE ================= -->
-        <formula formula="atan2([2], sqrt([1]^2 + [3]^2)) * 57.2957795">
+        <!-- 7. Trigonometry and Tare Angle Computation -->
+        <!-- Inverted longitudinal acceleration so dot moves toward the low side (consistent with Roll) -->
+        <formula formula="atan2(-[2], sqrt([1]^2 + [3]^2)) * 57.2957795">
             <input clear="false">a_lat</input>
             <input clear="false">a_long</input>
             <input clear="false">a_vert</input>
@@ -235,12 +249,12 @@
     </analysis>
 
     <views>
-        <!-- ================= VIEW 1: DUAL-AXIS LEVEL GAUGES ================= -->
+        <!-- VIEW 1: DUAL-AXIS LEVEL GAUGES -->
         <view label="Level Gauges">
             <graph
                 label="Leveling Tracks (Pitch = Cyan, Roll = Green)"
                 labelX="Roll: Left (-) / Right (+)"
-                labelY="Pitch: Back (-) / Front (+)"
+                labelY="Pitch: Front (+) / Back (-)"
                 unitX="°"
                 unitY="°"
                 aspectRatio="1"
@@ -253,7 +267,6 @@
                 minY="-10.0"
                 maxY="10.0"
             >
-                <!-- ================= VERTICAL PITCH SYSTEM (CYAN) ================= -->
                 <!-- Pitch main rail (Gray) -->
                 <input
                     axis="x"
@@ -310,7 +323,6 @@
                     style="lines"
                 >const_neg15</input>
 
-                <!-- ================= HORIZONTAL ROLL SYSTEM (GREEN) ================= -->
                 <!-- Roll main rail (Gray) -->
                 <input
                     axis="x"
@@ -367,7 +379,6 @@
                     style="lines"
                 >tick_short</input>
 
-                <!-- ================= LIVE CURSORS (COLOR MATCHED) ================= -->
                 <!-- Pitch Cursor: Slides vertically (Cyan Dot) -->
                 <input
                     axis="x"
@@ -404,15 +415,25 @@
                 <input>roll_now</input>
             </value>
 
-            <!-- ================= USER CONTROLS ================= -->
-            <dropdown default="1.0" label="Mounting Surface">
-                <output>mount_mode</output>
-                <map value="1.0">1. Floor / Table (Z Up)</map>
-                <map value="2.0">2. Ceiling (Z Down)</map>
-                <map value="3.0">3. Front Wall (Facing Rear)</map>
-                <map value="4.0">4. Rear Wall (Facing Front)</map>
-                <map value="5.0">5. Right Wall (Facing Left)</map>
-                <map value="6.0">6. Left Wall (Facing Right)</map>
+            <!-- USER CONTROLS -->
+            <dropdown default="2.0" label="USB-C Port Points To">
+                <output>mount_usbc</output>
+                <map value="1.0">1. Front</map>
+                <map value="2.0">2. Rear</map>
+                <map value="3.0">3. Left (Driver)</map>
+                <map value="4.0">4. Right (Passenger)</map>
+                <map value="5.0">5. Up (Roof)</map>
+                <map value="6.0">6. Down (Floor)</map>
+            </dropdown>
+
+            <dropdown default="5.0" label="Top Label Points To">
+                <output>mount_top</output>
+                <map value="1.0">1. Front</map>
+                <map value="2.0">2. Rear</map>
+                <map value="3.0">3. Left (Driver)</map>
+                <map value="4.0">4. Right (Passenger)</map>
+                <map value="5.0">5. Up (Roof)</map>
+                <map value="6.0">6. Down (Floor)</map>
             </dropdown>
 
             <button label="Set Level (Zero Reference)">
@@ -426,7 +447,7 @@
             </button>
         </view>
 
-        <!-- ================= VIEW 2: RAW SENSOR VALUES ================= -->
+        <!-- VIEW 2: RAW ACCELERATION VALUES -->
         <view label="Raw Acceleration">
             <value label="Raw Accel X (raw_ax)" precision="0">
                 <input>raw_ax</input>

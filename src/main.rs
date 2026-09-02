@@ -44,17 +44,10 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
     mpsl.run().await
 }
 
-/// How many outgoing L2CAP buffers per link
 const L2CAP_TXQ: u8 = 3;
-
-/// How many incoming L2CAP buffers per link
 const L2CAP_RXQ: u8 = 3;
-
-/// Max number of connections
 const CONNECTIONS_MAX: usize = 1;
-
-/// Max number of L2CAP channels.
-const L2CAP_CHANNELS_MAX: usize = 2; // Signal + att
+const L2CAP_CHANNELS_MAX: usize = 2;
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -90,7 +83,7 @@ struct PhyphoxService {
     experiment_ctrl: u8,
 }
 
-// --- IEEE 802.3 CRC32 Calculation ---
+// CRC32 calculation for Phyphox experiment transfer verification
 fn calculate_crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for &b in data {
@@ -116,7 +109,7 @@ async fn transfer_phyphox_experiment<P: PacketPool>(
     );
     let crc = calculate_crc32(PHYPHOX_EXPERIMENT);
 
-    // 1. Build & Send 15-byte Header Message
+    // Build and send 15-byte Header Message
     let mut header = [0u8; 20];
     header[0..7].copy_from_slice(b"phyphox");
     header[7..11].copy_from_slice(&(PHYPHOX_EXPERIMENT.len() as u32).to_be_bytes());
@@ -129,7 +122,7 @@ async fn transfer_phyphox_experiment<P: PacketPool>(
         .await;
     embassy_time::Timer::after(Duration::from_millis(20)).await;
 
-    // 2. Transmit File in 20-byte chunks
+    //  Transmit file in 20-byte chunks
     for chunk in PHYPHOX_EXPERIMENT.chunks(20) {
         let mut packet = [0u8; 20];
         packet[..chunk.len()].copy_from_slice(chunk);
@@ -143,56 +136,138 @@ async fn transfer_phyphox_experiment<P: PacketPool>(
     defmt::info!("Phyphox XML transfer complete");
 }
 
-// --- GATT Table Definition ---
+const LEVELING_SERVICE_UUID: Uuid = uuid!("a0000001-4493-41db-9609-eb926bd307c7");
+
+#[gatt_service(uuid = LEVELING_SERVICE_UUID)]
+struct LevelingService {
+    #[characteristic(uuid = "a0000002-4493-41db-9609-eb926bd307c7", read, notify)]
+    angles: [u8; 6],
+    #[characteristic(
+        uuid = "a0000003-4493-41db-9609-eb926bd307c7",
+        write,
+        write_without_response,
+        read
+    )]
+    config: [u8; 10],
+}
+
 #[gatt_server]
 struct Server {
     phyphox: PhyphoxService,
     leveling: LevelingService,
 }
 
-const LEVELING_SERVICE_UUID: Uuid = uuid!("12345678-1234-5678-1234-56789abcdef0");
+// Dedicated 8 KB storage sector defined in memory.x (0x000FE000..0x00100000)
+const STORAGE_RANGE: core::ops::Range<u32> = 0x000FE000..0x00100000;
+const CONFIG_KEY: u8 = 1;
 
-#[gatt_service(uuid = LEVELING_SERVICE_UUID)]
-struct LevelingService {
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify)]
-    angles: [u8; 6],
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", write, read)]
-    tare_cmd: u8,
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
+pub struct DeviceConfig {
+    pub usbc_dir: u8,
+    pub top_dir: u8,
+    pub pitch_offset: f32,
+    pub roll_offset: f32,
+}
+
+impl DeviceConfig {
+    pub const DEFAULT: Self = Self {
+        usbc_dir: 2, // Rear
+        top_dir: 5,  // Up
+        pitch_offset: 0.0,
+        roll_offset: 0.0,
+    };
+
+    pub fn to_bytes(&self) -> [u8; 10] {
+        let mut bytes = [0u8; 10];
+        bytes[0] = self.usbc_dir;
+        bytes[1] = self.top_dir;
+        bytes[2..6].copy_from_slice(&self.pitch_offset.to_le_bytes());
+        bytes[6..10].copy_from_slice(&self.roll_offset.to_le_bytes());
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 10 {
+            return None;
+        }
+        let usbc_dir = bytes[0];
+        let top_dir = bytes[1];
+        if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
+            return None;
+        }
+        let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+        let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
+        Some(Self {
+            usbc_dir,
+            top_dir,
+            pitch_offset,
+            roll_offset,
+        })
+    }
+}
+
+async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
+    let mut buf = [0u8; 64];
+    let res = sequential_storage::map::fetch_item::<u8, [u8; 10], _>(
+        flash,
+        STORAGE_RANGE,
+        &mut sequential_storage::cache::NoCache::new(),
+        &mut buf,
+        &CONFIG_KEY,
+    )
+    .await;
+
+    match res {
+        Ok(Some(bytes)) => {
+            if let Some(cfg) = DeviceConfig::from_bytes(&bytes) {
+                defmt::info!("Loaded config from flash: {:?}", cfg);
+                return cfg;
+            }
+        }
+        Ok(None) => {
+            defmt::info!("No stored config found in flash, using default");
+        }
+        Err(e) => {
+            defmt::warn!("Flash read error: {:?}", defmt::Debug2Format(&e));
+        }
+    }
+    DeviceConfig::DEFAULT
+}
+
+async fn save_config<'d>(flash: &mut nrf_mpsl::Flash<'d>, config: &DeviceConfig) {
+    let mut buf = [0u8; 64];
+    let bytes = config.to_bytes();
+    let res = sequential_storage::map::store_item::<u8, [u8; 10], _>(
+        flash,
+        STORAGE_RANGE,
+        &mut sequential_storage::cache::NoCache::new(),
+        &mut buf,
+        &CONFIG_KEY,
+        &bytes,
+    )
+    .await;
+
+    match res {
+        Ok(()) => {
+            defmt::info!("Saved config to flash: {:?}", config);
+        }
+        Err(e) => {
+            defmt::warn!("Flash write error: {:?}", defmt::Debug2Format(&e));
+        }
+    }
 }
 
 const LSM6DS3_ADDRESS: u8 = 0x6A;
-
 const LSM6DS3_WHO_AM_I_REG: u8 = 0x0F;
 const LSM6DS3_CTRL1_XL: u8 = 0x10;
-const LSM6DS3_CTRL2_G: u8 = 0x11;
-
-const LSM6DS3_STATUS_REG: u8 = 0x1E;
-
-const LSM6DS3_CTRL6_C: u8 = 0x15;
-const LSM6DS3_CTRL7_G: u8 = 0x16;
 const LSM6DS3_CTRL8_XL: u8 = 0x17;
-
-const LSM6DS3_OUTX_L_G: u8 = 0x22;
-const LSM6DS3_OUTX_H_G: u8 = 0x23;
-const LSM6DS3_OUTY_L_G: u8 = 0x24;
-const LSM6DS3_OUTY_H_G: u8 = 0x25;
-const LSM6DS3_OUTZ_L_G: u8 = 0x26;
-const LSM6DS3_OUTZ_H_G: u8 = 0x27;
-
 const LSM6DS3_OUTX_L_XL: u8 = 0x28;
-const LSM6DS3_OUTX_H_XL: u8 = 0x29;
-const LSM6DS3_OUTY_L_XL: u8 = 0x2A;
-const LSM6DS3_OUTY_H_XL: u8 = 0x2B;
-const LSM6DS3_OUTZ_L_XL: u8 = 0x2C;
-const LSM6DS3_OUTZ_H_XL: u8 = 0x2D;
 
-// --- MPU-6500 Reading & Angle Calculations ---
 async fn read_raw_accel(twi: &mut Twim<'static>) -> [u8; 6] {
     let mut raw_data = [0u8; 6];
     twi.write_read(LSM6DS3_ADDRESS, &[LSM6DS3_OUTX_L_XL], &mut raw_data)
         .await
         .unwrap();
-
     raw_data
 }
 
@@ -209,9 +284,8 @@ async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
 
-    // I2C
     defmt::info!("START");
-    // Enable power to the IMU (P1.08 must be HIGH)
+    // Enable power to the IMU (P1.08 on Seeed XIAO Sense must be HIGH)
     let mut imu_pwr = Output::new(p.P1_08, Level::Low, OutputDrive::HighDrive);
     embassy_time::Timer::after(Duration::from_millis(50)).await;
     imu_pwr.set_high();
@@ -219,7 +293,6 @@ async fn main(spawner: Spawner) {
 
     defmt::info!("IMU powered");
 
-    // Initialize I2C (TWIM)
     let mut config = embassy_nrf::twim::Config::default();
     config.sda_pullup = true;
     config.scl_pullup = true;
@@ -246,8 +319,6 @@ async fn main(spawner: Spawner) {
 
     defmt::info!("IMU configured");
 
-    // BLE
-
     let mpsl_p =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
@@ -262,6 +333,9 @@ async fn main(spawner: Spawner) {
         mpsl_p, Irqs, lfclk_cfg
     )));
 
+    let mut flash = nrf_mpsl::Flash::take(mpsl, p.NVMC);
+    let mut dev_config = load_config(&mut flash).await;
+
     defmt::info!("BLE prepared");
     spawner.spawn(defmt::unwrap!(mpsl_task(&*mpsl)));
     defmt::info!("BLE started");
@@ -272,14 +346,34 @@ async fn main(spawner: Spawner) {
     );
 
     let mut rng = rng::Rng::new(p.RNG, Irqs);
-
     let mut sdc_mem = sdc::Mem::<4720>::new();
     let sdc = defmt::unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
-    // GENERIC
-
-    let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
+    let addr0 = embassy_nrf::pac::FICR.deviceaddr(0).read();
+    let addr1 = embassy_nrf::pac::FICR.deviceaddr(1).read();
+    let raw_addr = [
+        addr0 as u8,
+        (addr0 >> 8) as u8,
+        (addr0 >> 16) as u8,
+        (addr0 >> 24) as u8,
+        addr1 as u8,
+        (addr1 >> 8) as u8 | 0xC0,
+    ];
+    let address = Address::random(raw_addr);
     defmt::info!("Our address = {:?}", address);
+
+    const HEX_CHARS: &[u8; 16] = b"0123456789ABCDEF";
+    let dev_id = embassy_nrf::pac::FICR.deviceid(0).read();
+    static DEVICE_NAME_BUF: static_cell::ConstStaticCell<[u8; 10]> =
+        static_cell::ConstStaticCell::new([0; 10]);
+    let name_buf = DEVICE_NAME_BUF.take();
+    name_buf[0..6].copy_from_slice(b"Level ");
+    name_buf[6] = HEX_CHARS[((dev_id >> 12) & 0xF) as usize];
+    name_buf[7] = HEX_CHARS[((dev_id >> 8) & 0xF) as usize];
+    name_buf[8] = HEX_CHARS[((dev_id >> 4) & 0xF) as usize];
+    name_buf[9] = HEX_CHARS[(dev_id & 0xF) as usize];
+    let device_name: &'static str = core::str::from_utf8(name_buf).unwrap();
+    defmt::info!("Broadcasting device name: {}", device_name);
 
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
@@ -291,17 +385,17 @@ async fn main(spawner: Spawner) {
 
     defmt::info!("Starting advertising and GATT service");
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
-        name: "TrouBLE",
+        name: device_name,
         appearance: &appearance::sensor::GENERIC_SENSOR,
     }))
     .unwrap();
+
     let _ = join(ble_task(runner), async {
         loop {
-            let conn = advertise("Leveler", &mut peripheral, &server)
+            let conn = advertise(device_name, &mut peripheral, &server)
                 .await
                 .unwrap();
 
-            // Run the GATT event processor and the sensor notification loop concurrently
             let _ = select(
                 // Task A: Process incoming GATT discovery and read/write requests
                 async {
@@ -313,8 +407,8 @@ async fn main(spawner: Spawner) {
                             }
                             GattConnectionEvent::Gatt { event } => {
                                 let mut should_transfer = false;
+                                let mut new_config: Option<DeviceConfig> = None;
 
-                                // Inspect the incoming write event
                                 if let GattEvent::Write(write_event) = &event {
                                     if write_event.handle() == server.phyphox.experiment_ctrl.handle
                                     {
@@ -323,15 +417,25 @@ async fn main(spawner: Spawner) {
                                                 should_transfer = true;
                                             }
                                         });
+                                    } else if write_event.handle() == server.leveling.config.handle
+                                    {
+                                        write_event.with_data(|_offset, data| {
+                                            if let Some(cfg) = DeviceConfig::from_bytes(data) {
+                                                new_config = Some(cfg);
+                                            }
+                                        });
                                     }
                                 }
 
-                                // Acknowledge and accept the ATT request
                                 let _ = event.accept();
 
-                                // Execute the async transfer outside the synchronous closure
                                 if should_transfer {
                                     transfer_phyphox_experiment(&conn, &server).await;
+                                }
+
+                                if let Some(cfg) = new_config {
+                                    dev_config = cfg;
+                                    save_config(&mut flash, &dev_config).await;
                                 }
                             }
                             _ => {}
@@ -358,7 +462,6 @@ async fn main(spawner: Spawner) {
     .await;
 }
 
-/// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn advertise<'values, 'server, C: Controller>(
     name: &'values str,
     peripheral: &mut Peripheral<'values, C, DefaultPacketPool>,
@@ -368,23 +471,21 @@ async fn advertise<'values, 'server, C: Controller>(
     let adv_len = AdStructure::encode_slice(
         &[
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::CompleteServiceUuids128(&[PHYPHOX_SERVICE_UUID
+            AdStructure::CompleteServiceUuids128(&[LEVELING_SERVICE_UUID
                 .as_raw()
                 .try_into()
                 .unwrap()]),
-            // AdStructure::IncompleteServiceUuids16(&[[0x0f, 0x18]]),
-            // AdStructure::CompleteLocalName(name.as_bytes()),
         ],
         &mut advertiser_data[..],
     )?;
     let mut scan_data = [0; 31];
     let scan_len = AdStructure::encode_slice(
         &[
-            AdStructure::CompleteLocalName(name.as_bytes()),
-            AdStructure::CompleteServiceUuids128(&[LEVELING_SERVICE_UUID
+            AdStructure::CompleteServiceUuids128(&[PHYPHOX_SERVICE_UUID
                 .as_raw()
                 .try_into()
                 .unwrap()]),
+            AdStructure::CompleteLocalName(name.as_bytes()),
         ],
         &mut scan_data[..],
     )?;

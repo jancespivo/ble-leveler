@@ -31,6 +31,7 @@ btuuid = {version="0.1", features=["uuid"]}
 bt-hci = { version = "0.10.1", default-features = false, features = ["defmt"] }
 libm = "0.2.16"
 micromath = "2.1.0"
+sequential-storage = "4.0"
 # rtc
 # ds323x = "0.6"
 # chrono = { version = "0.4", default-features = false }
