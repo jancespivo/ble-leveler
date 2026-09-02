@@ -113,6 +113,7 @@
             id="leveler"
             name="Level "
             uuid="a0000001-4493-41db-9609-eb926bd307c7"
+            mtu="128"
             subscribeOnStart="true"
             autoConnect="true"
         >
@@ -187,6 +188,58 @@
             >th_right</output>
         </bluetooth>
     </input>
+
+    <output>
+        <!-- Transmit updated configuration back to the device upon user modifications -->
+        <bluetooth
+            id="leveler"
+            name="Level "
+            uuid="a0000001-4493-41db-9609-eb926bd307c7"
+            mtu="128"
+            autoConnect="true"
+        >
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="0"
+                conversion="singleByte"
+            >mount_usbc</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="1"
+                conversion="singleByte"
+            >mount_top</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="2"
+                conversion="float32LittleEndian"
+            >pitch_offset</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="6"
+                conversion="float32LittleEndian"
+            >roll_offset</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="10"
+                conversion="float32LittleEndian"
+            >th_front</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="14"
+                conversion="float32LittleEndian"
+            >th_rear</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="18"
+                conversion="float32LittleEndian"
+            >th_left</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="22"
+                conversion="float32LittleEndian"
+            >th_right</input>
+        </bluetooth>
+    </output>
 
     <analysis>
         <!-- 1. Interpolate USB-C Direction Vector -->
