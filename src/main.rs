@@ -147,7 +147,7 @@ struct LevelingService {
         write,
         write_without_response,
         read,
-        notify
+        indicate
     )]
     config: [u8; 18],
 }
@@ -206,7 +206,7 @@ impl DeviceConfig {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 10 {
+        if bytes.len() < 18 {
             return None;
         }
         let usbc_dir = bytes[0];
@@ -217,21 +217,15 @@ impl DeviceConfig {
         let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
         let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
 
-        // Support legacy 10-byte flash records without thresholds from older firmware versions.
-        let (th_front, th_rear, th_left, th_right) = if bytes.len() >= 18 {
-            let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
-            let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
-            let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
-            let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
-            (
-                if f > 0.0 && !f.is_nan() { f } else { 1.5 },
-                if r > 0.0 && !r.is_nan() { r } else { 1.5 },
-                if l > 0.0 && !l.is_nan() { l } else { 1.5 },
-                if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 },
-            )
-        } else {
-            (1.5, 1.5, 1.5, 1.5)
-        };
+        let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
+        let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
+        let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
+        let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
+
+        let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
+        let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
+        let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
+        let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
 
         Some(Self {
             usbc_dir,
@@ -275,31 +269,6 @@ async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
             }
         }
         Ok(None) => {
-            // Check for a 10-byte legacy record before falling back to default values.
-            let legacy_res = sequential_storage::map::fetch_item::<u8, [u8; 10], _>(
-                flash,
-                STORAGE_RANGE,
-                &mut sequential_storage::cache::NoCache::new(),
-                &mut buf,
-                &CONFIG_KEY,
-            )
-            .await;
-            if let Ok(Some(legacy_bytes)) = legacy_res {
-                if let Some(cfg) = DeviceConfig::from_bytes(&legacy_bytes) {
-                    defmt::info!(
-                        "Loaded legacy config from flash -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
-                        cfg.usbc_dir,
-                        cfg.top_dir,
-                        cfg.pitch_offset,
-                        cfg.roll_offset,
-                        cfg.th_front,
-                        cfg.th_rear,
-                        cfg.th_left,
-                        cfg.th_right
-                    );
-                    return cfg;
-                }
-            }
             defmt::info!("No stored config found in flash, using default config");
         }
         Err(e) => {
@@ -489,9 +458,6 @@ async fn main(spawner: Spawner) {
                 .await
                 .unwrap();
 
-            // Transmit stored sensor configuration to smartphone upon connection
-            let _ = server.leveling.config.notify(&conn, &dev_config.to_bytes(), false).await;
-
             let _ = select(
                 // Task A: Process incoming GATT discovery and read/write requests
                 async {
@@ -569,6 +535,9 @@ async fn main(spawner: Spawner) {
 
                                 if should_transfer {
                                     transfer_phyphox_experiment(&conn, &server).await;
+                                    // Send stored flash configuration indication after XML transfer completes
+                                    embassy_time::Timer::after(Duration::from_millis(150)).await;
+                                    let _ = server.leveling.config.indicate(&conn, &dev_config.to_bytes(), false).await;
                                 }
 
                                 if let Some(cfg) = new_config {
@@ -577,7 +546,7 @@ async fn main(spawner: Spawner) {
                                         dev_config = cfg;
                                         let _ = server.set(&server.leveling.config, &dev_config.to_bytes());
                                         save_config(&mut flash, &dev_config).await;
-                                        let _ = server.leveling.config.notify(&conn, &dev_config.to_bytes(), false).await;
+                                        let _ = server.leveling.config.indicate(&conn, &dev_config.to_bytes(), false).await;
                                     }
                                 }
                             }
