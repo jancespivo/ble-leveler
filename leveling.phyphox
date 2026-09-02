@@ -65,10 +65,28 @@
         <container size="1" static="true" init="0.0">cursor_zero</container>
         <container size="2" static="true" init="-10.0, 10.0">range_long</container>
         <container size="2" static="true" init="0.0, 0.0">const_zero</container>
-        <container size="2" static="true" init="-1.5, 1.5">zone_long</container>
         <container size="2" static="true" init="-0.8, 0.8">tick_short</container>
-        <container size="2" static="true" init="-1.5, -1.5">const_neg15</container>
-        <container size="2" static="true" init="1.5, 1.5">const_pos15</container>
+        <!-- Thresholds (Front, Rear, Left, Right in degrees) -->
+        <container size="1" init="1.5">th_front</container>
+        <container size="1" init="1.5">th_rear</container>
+        <container size="1" init="1.5">th_left</container>
+        <container size="1" init="1.5">th_right</container>
+        <container size="1">neg_th_rear</container>
+        <container size="1">neg_th_left</container>
+
+        <!-- Scaled Thresholds for BLE (centidegrees integer) -->
+        <container size="1" init="150">th_front_scaled</container>
+        <container size="1" init="150">th_rear_scaled</container>
+        <container size="1" init="150">th_left_scaled</container>
+        <container size="1" init="150">th_right_scaled</container>
+
+        <!-- Dynamic Geometry for Comfort Zones and Ticks -->
+        <container size="2">zone_pitch</container>
+        <container size="2">zone_roll</container>
+        <container size="2">tick_pitch_front_y</container>
+        <container size="2">tick_pitch_rear_y</container>
+        <container size="2">tick_roll_left_x</container>
+        <container size="2">tick_roll_right_x</container>
     </data-containers>
 
     <input>
@@ -246,6 +264,76 @@
             <input clear="false">roll_offset</input>
             <output>roll_now</output>
         </formula>
+
+        <!-- 8. Threshold Bound Calculations and Dynamic Geometry Generation -->
+        <formula formula="-[1]">
+            <input clear="false">th_rear</input>
+            <output>neg_th_rear</output>
+        </formula>
+        <formula formula="-[1]">
+            <input clear="false">th_left</input>
+            <output>neg_th_left</output>
+        </formula>
+
+        <!-- Pitch comfort zone segment [-th_rear, th_front] -->
+        <append>
+            <input clear="false">neg_th_rear</input>
+            <input clear="false">th_front</input>
+            <output>zone_pitch</output>
+        </append>
+
+        <!-- Roll comfort zone segment [-th_left, th_right] -->
+        <append>
+            <input clear="false">neg_th_left</input>
+            <input clear="false">th_right</input>
+            <output>zone_roll</output>
+        </append>
+
+        <!-- Pitch Front tick Y segment [th_front, th_front] -->
+        <append>
+            <input clear="false">th_front</input>
+            <input clear="false">th_front</input>
+            <output>tick_pitch_front_y</output>
+        </append>
+
+        <!-- Pitch Rear tick Y segment [-th_rear, -th_rear] -->
+        <append>
+            <input clear="false">neg_th_rear</input>
+            <input clear="false">neg_th_rear</input>
+            <output>tick_pitch_rear_y</output>
+        </append>
+
+        <!-- Roll Left tick X segment [-th_left, -th_left] -->
+        <append>
+            <input clear="false">neg_th_left</input>
+            <input clear="false">neg_th_left</input>
+            <output>tick_roll_left_x</output>
+        </append>
+
+        <!-- Roll Right tick X segment [th_right, th_right] -->
+        <append>
+            <input clear="false">th_right</input>
+            <input clear="false">th_right</input>
+            <output>tick_roll_right_x</output>
+        </append>
+
+        <!-- 9. One-way threshold scaling for BLE output -->
+        <formula formula="[1] * 100">
+            <input clear="false">th_front</input>
+            <output>th_front_scaled</output>
+        </formula>
+        <formula formula="[1] * 100">
+            <input clear="false">th_rear</input>
+            <output>th_rear_scaled</output>
+        </formula>
+        <formula formula="[1] * 100">
+            <input clear="false">th_left</input>
+            <output>th_left_scaled</output>
+        </formula>
+        <formula formula="[1] * 100">
+            <input clear="false">th_right</input>
+            <output>th_right_scaled</output>
+        </formula>
     </analysis>
 
     <views>
@@ -281,7 +369,7 @@
                     style="lines"
                 >range_long</input>
 
-                <!-- Pitch comfort zone (Thick Cyan line: +/-1.5°) -->
+                <!-- Pitch comfort zone (Thick Cyan line) -->
                 <input
                     axis="x"
                     color="00e5ff"
@@ -293,9 +381,9 @@
                     color="00e5ff"
                     lineWidth="6"
                     style="lines"
-                >zone_long</input>
+                >zone_pitch</input>
 
-                <!-- Pitch +1.5° threshold tick (Cyan) -->
+                <!-- Pitch Front threshold tick (Cyan) -->
                 <input
                     axis="x"
                     color="00e5ff"
@@ -307,9 +395,9 @@
                     color="00e5ff"
                     lineWidth="2"
                     style="lines"
-                >const_pos15</input>
+                >tick_pitch_front_y</input>
 
-                <!-- Pitch -1.5° threshold tick (Cyan) -->
+                <!-- Pitch Rear threshold tick (Cyan) -->
                 <input
                     axis="x"
                     color="00e5ff"
@@ -321,7 +409,7 @@
                     color="00e5ff"
                     lineWidth="2"
                     style="lines"
-                >const_neg15</input>
+                >tick_pitch_rear_y</input>
 
                 <!-- Roll main rail (Gray) -->
                 <input
@@ -337,13 +425,13 @@
                     style="lines"
                 >const_zero</input>
 
-                <!-- Roll comfort zone (Thick Green line: +/-1.5°) -->
+                <!-- Roll comfort zone (Thick Green line) -->
                 <input
                     axis="x"
                     color="00e676"
                     lineWidth="6"
                     style="lines"
-                >zone_long</input>
+                >zone_roll</input>
                 <input
                     axis="y"
                     color="00e676"
@@ -351,13 +439,13 @@
                     style="lines"
                 >const_zero</input>
 
-                <!-- Roll -1.5° threshold tick (Green) -->
+                <!-- Roll Left threshold tick (Green) -->
                 <input
                     axis="x"
                     color="00e676"
                     lineWidth="2"
                     style="lines"
-                >const_neg15</input>
+                >tick_roll_left_x</input>
                 <input
                     axis="y"
                     color="00e676"
@@ -365,13 +453,13 @@
                     style="lines"
                 >tick_short</input>
 
-                <!-- Roll +1.5° threshold tick (Green) -->
+                <!-- Roll Right threshold tick (Green) -->
                 <input
                     axis="x"
                     color="00e676"
                     lineWidth="2"
                     style="lines"
-                >const_pos15</input>
+                >tick_roll_right_x</input>
                 <input
                     axis="y"
                     color="00e676"
@@ -436,6 +524,20 @@
                 <map value="6.0">6. Down (Floor)</map>
             </dropdown>
 
+            <!-- THRESHOLD CONTROLS -->
+            <edit default="1.5" decimal="true" label="Front Threshold (+Pitch)" max="10.0" min="0.1" signed="false" unit="°">
+                <output>th_front</output>
+            </edit>
+            <edit default="1.5" decimal="true" label="Rear Threshold (-Pitch)" max="10.0" min="0.1" signed="false" unit="°">
+                <output>th_rear</output>
+            </edit>
+            <edit default="1.5" decimal="true" label="Left Threshold (-Roll)" max="10.0" min="0.1" signed="false" unit="°">
+                <output>th_left</output>
+            </edit>
+            <edit default="1.5" decimal="true" label="Right Threshold (+Roll)" max="10.0" min="0.1" signed="false" unit="°">
+                <output>th_right</output>
+            </edit>
+
             <button label="Set Level (Zero Reference)">
                 <input>pitch_calc</input><output>pitch_offset</output>
                 <input>roll_calc</input><output>roll_offset</output>
@@ -469,4 +571,54 @@
             </value>
         </view>
     </views>
+
+    <output>
+        <!-- Transmit configuration back to device on any setting adjustment -->
+        <!-- Thresholds use explicit centidegree scaling and int16 to fit within the 20-byte BLE single write limit -->
+        <bluetooth
+            uuid="a0000001-4493-41db-9609-eb926bd307c7"
+            autoConnect="true"
+        >
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="0"
+                conversion="singleByte"
+            >mount_usbc</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="1"
+                conversion="singleByte"
+            >mount_top</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="2"
+                conversion="float32LittleEndian"
+            >pitch_offset</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="6"
+                conversion="float32LittleEndian"
+            >roll_offset</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="10"
+                conversion="int16LittleEndian"
+            >th_front_scaled</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="12"
+                conversion="int16LittleEndian"
+            >th_rear_scaled</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="14"
+                conversion="int16LittleEndian"
+            >th_left_scaled</input>
+            <input
+                char="a0000003-4493-41db-9609-eb926bd307c7"
+                offset="16"
+                conversion="int16LittleEndian"
+            >th_right_scaled</input>
+        </bluetooth>
+    </output>
 </phyphox>

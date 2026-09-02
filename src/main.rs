@@ -146,9 +146,10 @@ struct LevelingService {
         uuid = "a0000003-4493-41db-9609-eb926bd307c7",
         write,
         write_without_response,
-        read
+        read,
+        notify
     )]
-    config: [u8; 10],
+    config: [u8; 18],
 }
 
 #[gatt_server]
@@ -167,6 +168,10 @@ pub struct DeviceConfig {
     pub top_dir: u8,
     pub pitch_offset: f32,
     pub roll_offset: f32,
+    pub th_front: f32,
+    pub th_rear: f32,
+    pub th_left: f32,
+    pub th_right: f32,
 }
 
 impl DeviceConfig {
@@ -175,14 +180,28 @@ impl DeviceConfig {
         top_dir: 5,  // Up
         pitch_offset: 0.0,
         roll_offset: 0.0,
+        th_front: 1.5,
+        th_rear: 1.5,
+        th_left: 1.5,
+        th_right: 1.5,
     };
 
-    pub fn to_bytes(&self) -> [u8; 10] {
-        let mut bytes = [0u8; 10];
+    // The BLE write payload limit without MTU exchange is 20 bytes.
+    // We scale thresholds to centidegrees (i16) to fit the whole structure into 18 bytes.
+    pub fn to_bytes(&self) -> [u8; 18] {
+        let mut bytes = [0u8; 18];
         bytes[0] = self.usbc_dir;
         bytes[1] = self.top_dir;
         bytes[2..6].copy_from_slice(&self.pitch_offset.to_le_bytes());
         bytes[6..10].copy_from_slice(&self.roll_offset.to_le_bytes());
+        let f = (self.th_front * 100.0) as i16;
+        let r = (self.th_rear * 100.0) as i16;
+        let l = (self.th_left * 100.0) as i16;
+        let rg = (self.th_right * 100.0) as i16;
+        bytes[10..12].copy_from_slice(&f.to_le_bytes());
+        bytes[12..14].copy_from_slice(&r.to_le_bytes());
+        bytes[14..16].copy_from_slice(&l.to_le_bytes());
+        bytes[16..18].copy_from_slice(&rg.to_le_bytes());
         bytes
     }
 
@@ -197,18 +216,39 @@ impl DeviceConfig {
         }
         let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
         let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
+
+        // Support legacy 10-byte flash records without thresholds from older firmware versions.
+        let (th_front, th_rear, th_left, th_right) = if bytes.len() >= 18 {
+            let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
+            let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
+            let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
+            let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
+            (
+                if f > 0.0 && !f.is_nan() { f } else { 1.5 },
+                if r > 0.0 && !r.is_nan() { r } else { 1.5 },
+                if l > 0.0 && !l.is_nan() { l } else { 1.5 },
+                if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 },
+            )
+        } else {
+            (1.5, 1.5, 1.5, 1.5)
+        };
+
         Some(Self {
             usbc_dir,
             top_dir,
             pitch_offset,
             roll_offset,
+            th_front,
+            th_rear,
+            th_left,
+            th_right,
         })
     }
 }
 
 async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
     let mut buf = [0u8; 64];
-    let res = sequential_storage::map::fetch_item::<u8, [u8; 10], _>(
+    let res = sequential_storage::map::fetch_item::<u8, [u8; 18], _>(
         flash,
         STORAGE_RANGE,
         &mut sequential_storage::cache::NoCache::new(),
@@ -220,12 +260,47 @@ async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
     match res {
         Ok(Some(bytes)) => {
             if let Some(cfg) = DeviceConfig::from_bytes(&bytes) {
-                defmt::info!("Loaded config from flash: {:?}", cfg);
+                defmt::info!(
+                    "Loaded config from flash -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
+                    cfg.usbc_dir,
+                    cfg.top_dir,
+                    cfg.pitch_offset,
+                    cfg.roll_offset,
+                    cfg.th_front,
+                    cfg.th_rear,
+                    cfg.th_left,
+                    cfg.th_right
+                );
                 return cfg;
             }
         }
         Ok(None) => {
-            defmt::info!("No stored config found in flash, using default");
+            // Check for a 10-byte legacy record before falling back to default values.
+            let legacy_res = sequential_storage::map::fetch_item::<u8, [u8; 10], _>(
+                flash,
+                STORAGE_RANGE,
+                &mut sequential_storage::cache::NoCache::new(),
+                &mut buf,
+                &CONFIG_KEY,
+            )
+            .await;
+            if let Ok(Some(legacy_bytes)) = legacy_res {
+                if let Some(cfg) = DeviceConfig::from_bytes(&legacy_bytes) {
+                    defmt::info!(
+                        "Loaded legacy config from flash -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
+                        cfg.usbc_dir,
+                        cfg.top_dir,
+                        cfg.pitch_offset,
+                        cfg.roll_offset,
+                        cfg.th_front,
+                        cfg.th_rear,
+                        cfg.th_left,
+                        cfg.th_right
+                    );
+                    return cfg;
+                }
+            }
+            defmt::info!("No stored config found in flash, using default config");
         }
         Err(e) => {
             defmt::warn!("Flash read error: {:?}", defmt::Debug2Format(&e));
@@ -235,26 +310,37 @@ async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
 }
 
 async fn save_config<'d>(flash: &mut nrf_mpsl::Flash<'d>, config: &DeviceConfig) {
-    let mut buf = [0u8; 64];
     let bytes = config.to_bytes();
-    let res = sequential_storage::map::store_item::<u8, [u8; 10], _>(
-        flash,
-        STORAGE_RANGE,
-        &mut sequential_storage::cache::NoCache::new(),
-        &mut buf,
-        &CONFIG_KEY,
-        &bytes,
-    )
-    .await;
+    // Flash operations share radio timeslots via MPSL.
+    // Retry with delay when ongoing BLE activity causes temporary ENOMEM errors.
+    for attempt in 1..=5 {
+        let mut buf = [0u8; 64];
+        let res = sequential_storage::map::store_item::<u8, [u8; 18], _>(
+            flash,
+            STORAGE_RANGE,
+            &mut sequential_storage::cache::NoCache::new(),
+            &mut buf,
+            &CONFIG_KEY,
+            &bytes,
+        )
+        .await;
 
-    match res {
-        Ok(()) => {
-            defmt::info!("Saved config to flash: {:?}", config);
-        }
-        Err(e) => {
-            defmt::warn!("Flash write error: {:?}", defmt::Debug2Format(&e));
+        match res {
+            Ok(()) => {
+                defmt::info!("Saved config to flash (attempt {}): {:?}", attempt, config);
+                return;
+            }
+            Err(e) => {
+                defmt::warn!(
+                    "Flash write attempt {} failed: {:?}",
+                    attempt,
+                    defmt::Debug2Format(&e)
+                );
+                embassy_time::Timer::after(Duration::from_millis(50)).await;
+            }
         }
     }
+    defmt::error!("Failed to save config to flash after 5 attempts");
 }
 
 const LSM6DS3_ADDRESS: u8 = 0x6A;
@@ -328,10 +414,15 @@ async fn main(spawner: Spawner) {
         accuracy_ppm: mpsl::raw::MPSL_DEFAULT_CLOCK_ACCURACY_PPM as u16,
         skip_wait_lfclk_started: mpsl::raw::MPSL_DEFAULT_SKIP_WAIT_LFCLK_STARTED != 0,
     };
+    // The nrf_mpsl::Flash driver schedules flash operations inside timeslots to prevent
+    // disrupting active BLE radio operations. Timeslot memory must be allocated on initialization.
+    static SESSION_MEM: StaticCell<mpsl::SessionMem<1>> = StaticCell::new();
+    let session_mem = SESSION_MEM.init(mpsl::SessionMem::new());
+
     static MPSL: StaticCell<MultiprotocolServiceLayer> = StaticCell::new();
-    let mpsl = MPSL.init(defmt::unwrap!(mpsl::MultiprotocolServiceLayer::new(
-        mpsl_p, Irqs, lfclk_cfg
-    )));
+    let mpsl = MPSL.init(defmt::unwrap!(
+        mpsl::MultiprotocolServiceLayer::with_timeslots(mpsl_p, Irqs, lfclk_cfg, session_mem)
+    ));
 
     let mut flash = nrf_mpsl::Flash::take(mpsl, p.NVMC);
     let mut dev_config = load_config(&mut flash).await;
@@ -390,11 +481,16 @@ async fn main(spawner: Spawner) {
     }))
     .unwrap();
 
+    let _ = server.set(&server.leveling.config, &dev_config.to_bytes());
+
     let _ = join(ble_task(runner), async {
         loop {
             let conn = advertise(device_name, &mut peripheral, &server)
                 .await
                 .unwrap();
+
+            // Transmit stored sensor configuration to smartphone upon connection
+            let _ = server.leveling.config.notify(&conn, &dev_config.to_bytes(), false).await;
 
             let _ = select(
                 // Task A: Process incoming GATT discovery and read/write requests
@@ -409,6 +505,22 @@ async fn main(spawner: Spawner) {
                                 let mut should_transfer = false;
                                 let mut new_config: Option<DeviceConfig> = None;
 
+                                if let GattEvent::Read(read_event) = &event {
+                                    if read_event.handle() == server.leveling.config.handle {
+                                        defmt::info!(
+                                            "Phone read config -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
+                                            dev_config.usbc_dir,
+                                            dev_config.top_dir,
+                                            dev_config.pitch_offset,
+                                            dev_config.roll_offset,
+                                            dev_config.th_front,
+                                            dev_config.th_rear,
+                                            dev_config.th_left,
+                                            dev_config.th_right
+                                        );
+                                    }
+                                }
+
                                 if let GattEvent::Write(write_event) = &event {
                                     if write_event.handle() == server.phyphox.experiment_ctrl.handle
                                     {
@@ -419,9 +531,35 @@ async fn main(spawner: Spawner) {
                                         });
                                     } else if write_event.handle() == server.leveling.config.handle
                                     {
-                                        write_event.with_data(|_offset, data| {
+                                        write_event.with_data(|offset, data| {
                                             if let Some(cfg) = DeviceConfig::from_bytes(data) {
-                                                new_config = Some(cfg);
+                                                if cfg != dev_config {
+                                                    defmt::info!(
+                                                        "Phone wrote new config (offset: {}, len: {}): {=[u8]}",
+                                                        offset,
+                                                        data.len(),
+                                                        data
+                                                    );
+                                                    defmt::info!(
+                                                        "New config applied -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
+                                                        cfg.usbc_dir,
+                                                        cfg.top_dir,
+                                                        cfg.pitch_offset,
+                                                        cfg.roll_offset,
+                                                        cfg.th_front,
+                                                        cfg.th_rear,
+                                                        cfg.th_left,
+                                                        cfg.th_right
+                                                    );
+                                                    new_config = Some(cfg);
+                                                }
+                                            } else {
+                                                defmt::warn!(
+                                                    "Failed to parse config payload from phone (offset: {}, len: {}): {=[u8]}",
+                                                    offset,
+                                                    data.len(),
+                                                    data
+                                                );
                                             }
                                         });
                                     }
@@ -434,8 +572,13 @@ async fn main(spawner: Spawner) {
                                 }
 
                                 if let Some(cfg) = new_config {
-                                    dev_config = cfg;
-                                    save_config(&mut flash, &dev_config).await;
+                                    // Save only when values change to prevent redundant flash operations and event loop blocking.
+                                    if cfg != dev_config {
+                                        dev_config = cfg;
+                                        let _ = server.set(&server.leveling.config, &dev_config.to_bytes());
+                                        save_config(&mut flash, &dev_config).await;
+                                        let _ = server.leveling.config.notify(&conn, &dev_config.to_bytes(), false).await;
+                                    }
                                 }
                             }
                             _ => {}
