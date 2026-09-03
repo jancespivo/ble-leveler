@@ -4,9 +4,20 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![Framework: Embassy](https://img.shields.io/badge/Framework-Embassy-purple.svg)](https://embassy.dev/)
 
-Embedded leveling firmware for campervans and vehicles. Powered by Rust, Bluetooth Low Energy (BLE), and the open-source Phyphox mobile application.
+Hassle-free Bluetooth leveling device and mobile interface. Powered by Rust, Bluetooth Low Energy (BLE), and the open-source Phyphox app.
 
-**Leveler** is an asynchronous embedded firmware for the Nordic nRF52840 microcontroller (Seeed Studio XIAO BLE Sense) and the integrated LSM6DS3 IMU. It operates as an intelligent leveling sensor that transfers an interactive dual-axis crosshair display directly to your smartphone with no custom app installation.
+**Leveler** is a wireless leveling solution for the Nordic nRF52840 microcontroller (Seeed Studio XIAO BLE Sense) and LSM6DS3 IMU. It operates as a self-describing sensor device that transmits an interactive dual-axis crosshair display directly to your smartphone with no custom app store installation.
+
+---
+
+## Use Cases
+
+- **Campervans and Motorhomes (RVs):** Level the vehicle at campsites and position leveling ramps with live crosshair feedback from the driver seat.
+- **Overland and Off-Road Vehicles:** Level 4x4 vehicles and rooftop tents on uneven wilderness terrain.
+- **Trailers and Caravans:** Verify tongue level, hitch alignment, and uniform cargo weight distribution during loading and unhitching.
+- **Mobile Workshops and Field Labs:** Align mobile workbenches, portable machine tools, and 3D printers in service vans.
+- **Marine and Small Craft:** Measure static boat list and trim balance while docked or at anchor.
+- **Portable Solar Setups:** Align portable ground panels to flat reference surfaces or targeted tilt angles.
 
 ---
 
@@ -31,12 +42,7 @@ graph TD
     D -->|Dual-Axis Gauge Display| E[Interactive Driver Interface]
 ```
 
-### Architectural Details
-
-1. **Self-Describing BLE Sensor:** The microcontroller stores the compressed Phyphox XML definition in flash memory and transmits it on demand over the standard Phyphox GATT service.
-2. **Dynamic Coordinate Transformation:** The system calculates 3D Cartesian basis vectors ($X_s, Y_s, Z_s$) in real time from the selected USB-C and Top Label directions.
-3. **Low-Side Ball Physics:** The crosshair cursors move toward the lower side of the vehicle to match physical leveling ramp placement.
-4. **Timeslot-Managed Storage:** Non-volatile flash read and write operations use MPSL timeslots to prevent disruption of active BLE radio connections.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full subsystem documentation, mathematical coordinate transformations, BLE GATT specifications, and flash storage details.
 
 ---
 
