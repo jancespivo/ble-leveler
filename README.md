@@ -4,19 +4,19 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![Framework: Embassy](https://img.shields.io/badge/Framework-Embassy-purple.svg)](https://embassy.dev/)
 
-> Precise, zero-install campervan leveling firmware powered by Rust, BLE, and Phyphox.
+Embedded leveling firmware for campervans and vehicles. Powered by Rust, Bluetooth Low Energy (BLE), and the open-source Phyphox mobile application.
 
-**Leveler** is an asynchronous embedded firmware for the Nordic nRF52840 (Seeed Studio XIAO BLE Sense) and LSM6DS3 IMU. It turns your microcontroller into an intelligent leveling sensor that streams dual-axis crosshair visual data directly to your smartphone with zero app installation.
+**Leveler** is an asynchronous embedded firmware for the Nordic nRF52840 microcontroller (Seeed Studio XIAO BLE Sense) and the integrated LSM6DS3 IMU. It operates as an intelligent leveling sensor that transfers an interactive dual-axis crosshair display directly to your smartphone with no custom app installation.
 
 ---
 
-## Why Leveler?
+## Capabilities
 
-- **Rust for Reliability:** Built with `no_std` Rust on the `embassy` asynchronous framework. It provides memory safety, deterministic execution, and zero runtime crashes.
-- **Zero App Installation:** Uses the open-source **Phyphox** application. The firmware dynamically packages and transmits the complete interactive UI definition over BLE on connection.
-- **Universal 24-Orientation Mounting:** Mount the sensor in any of the 24 orthogonal cube orientations to suit your USB-C cable routing. The dynamic vector engine calculates accurate vehicle pitch and roll automatically.
-- **Persistent Flash Storage:** Stores orientation choices and zero-reference calibrations in non-volatile flash memory with wear leveling.
-- **Ultra-Low Power:** Uses Bluetooth Low Energy (TrouBLE stack) with asynchronous sleep modes to preserve vehicle battery power.
+- **Memory Safety and Reliability:** Built with `no_std` Rust on the asynchronous `embassy` framework.
+- **Zero App Installation:** Uses the open-source **Phyphox** application. The firmware automatically compresses and transfers the full interactive experiment UI over BLE.
+- **Universal 24-Orientation Mounting:** Mount the sensor in any of the 24 orthogonal orientations. The internal vector engine calculates accurate pitch and roll angles automatically.
+- **Persistent Flash Storage:** Stores orientation configurations, zero-reference tare calibrations, and tolerance thresholds in non-volatile flash memory with wear leveling.
+- **Low-Power Operation:** Uses the `trouble-host` BLE stack and asynchronous sleep modes to minimize power consumption.
 
 ---
 
@@ -24,26 +24,28 @@
 
 ```mermaid
 graph TD
-    A[LSM6DS3 IMU] -->|I2C / 104 Hz| B[Leveler Firmware: nRF52840]
-    C[Internal Flash: sequential-storage] <-->|Persist Config| B
-    B -->|BLE GATT Notifications| D[Phyphox Mobile App]
+    A[LSM6DS3 IMU] -->|I2C 104 Hz| B[Leveler Firmware: nRF52840]
+    C[Internal Flash: sequential-storage] <-->|Read / Write Config| B
+    B -->|BLE GATT Notifications 20 Hz| D[Phyphox Mobile App]
     B -.->|BLE OTA XML Transfer| D
-    D -->|Dual-Axis Gauge UI| E[Interactive Driver Display]
+    D -->|Dual-Axis Gauge Display| E[Interactive Driver Interface]
 ```
 
-### Core Architecture Principles
+### Architectural Details
 
-1. **Self-Describing BLE Sensor:** The microcontroller stores the compressed Phyphox XML definition in flash and transfers it on demand over a custom GATT service.
-2. **Dynamic Basis Vector Transformation:** Instead of fixed lookup tables, the system computes the 3D coordinate basis vectors ($X_s, Y_s, Z_s$) in real time from USB-C and Top Label selections.
-3. **Low Side Indicator (Ball Physics):** The crosshair cursors move toward the lower side of the vehicle, matching intuitive leveling ramp positioning.
+1. **Self-Describing BLE Sensor:** The microcontroller stores the compressed Phyphox XML definition in flash memory and transmits it on demand over the standard Phyphox GATT service.
+2. **Dynamic Coordinate Transformation:** The system calculates 3D Cartesian basis vectors ($X_s, Y_s, Z_s$) in real time from the selected USB-C and Top Label directions.
+3. **Low-Side Ball Physics:** The crosshair cursors move toward the lower side of the vehicle to match physical leveling ramp placement.
+4. **Timeslot-Managed Storage:** Non-volatile flash read and write operations use MPSL timeslots to prevent disruption of active BLE radio connections.
 
 ---
 
 ## Hardware Requirements
 
-- **Microcontroller Board:** Seeed Studio XIAO BLE Sense (Nordic nRF52840 + LSM6DS3 IMU).
-- **Power Supply:** 5V USB-C or 3.7V LiPo battery.
-- **Mobile Device:** iOS or Android device with Bluetooth Low Energy and the free [Phyphox app](https://phyphox.org/).
+- **Microcontroller Board:** Seeed Studio XIAO BLE Sense (Nordic nRF52840 with LSM6DS3 IMU).
+- **Power Supply:** 5V USB-C or 3.7V lithium-polymer battery.
+- **Mobile Device:** iOS or Android device with Bluetooth Low Energy and the free [Phyphox application](https://phyphox.org/).
+- **Debug Probe:** SWD debug probe supported by probe-rs (such as J-Link, CMSIS-DAP, or ST-Link).
 
 ---
 
@@ -55,37 +57,32 @@ graph TD
   ```sh
   rustup target add thumbv7em-none-eabi
   ```
-- Install [probe-rs](https://probe.rs/) for flashing and debugging:
+- Install [probe-rs](https://probe.rs/) for flashing and runtime logs:
   ```sh
   cargo install probe-rs-tools --locked
   ```
 
-### 2. Build the Firmware
+### 2. Build and Flash Firmware
 
-Compile the release binary. The build script automatically compresses `leveling.phyphox` into the binary:
-
-```sh
-cargo build --release
-```
-
-### 3. Flash to Microcontroller
-
-Connect your Seeed Studio XIAO BLE Sense via SWD / USB debug probe and execute:
+Connect your debug probe to the Seeed Studio XIAO BLE Sense SWD pins and run:
 
 ```sh
-probe-rs run --chip nRF52840_xxAA --release
+cargo run --release
 ```
+
+The build script compresses `leveler.phyphox` into the binary automatically, flashes the target, and starts `defmt` logging.
 
 ---
 
 ## Operation
 
-1. **Launch Phyphox:** Open the Phyphox app on your smartphone.
-2. **Scan for Leveler:** Tap the **+** button, select **Add experiment for Bluetooth device**, and select **Leveler**.
-3. **Configure Orientation:**
+1. **Open Phyphox:** Start the Phyphox application on your mobile device.
+2. **Scan for Sensor:** Tap the **+** button, choose **Add experiment for Bluetooth device**, and select **Leveler**.
+3. **Configure Mounting Orientation:**
    - Set **USB-C Port Points To** (Front, Rear, Left, Right, Up, Down).
    - Set **Top Label Points To** (Front, Rear, Left, Right, Up, Down).
-4. **Set Zero Reference (Optional):** Park on a known level surface and tap **Set Level (Zero Reference)** to calibrate vehicle offsets.
+4. **Set Zero Reference (Optional):** Park the vehicle on a known level surface and tap **Set Level (Zero Reference)** to store offset calibration in flash memory.
+5. **Set Tolerance Thresholds:** Adjust front, rear, left, and right threshold limits for visual level indicators.
 
 ---
 

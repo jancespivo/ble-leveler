@@ -1,6 +1,6 @@
 <phyphox version="1.19">
-    <title>Campervan Leveling</title>
-    <category>Campervan Tools</category>
+    <title>Leveler</title>
+    <category>Tools</category>
     <description>Dual-Axis Crosshair Gauge with Dynamic Sensor Orientation</description>
 
     <data-containers>
@@ -235,11 +235,8 @@
 
     <views>
         <!-- VIEW 1: DUAL-AXIS LEVEL GAUGES -->
-        <view label="Level Gauges">
+        <view label="Leveling">
             <graph
-                label="Leveling Tracks (Pitch = Cyan, Roll = Green)"
-                labelX="Roll: Left (-) / Right (+)"
-                labelY="Pitch: Front (+) / Back (-)"
                 unitX="°"
                 unitY="°"
                 aspectRatio="1"
@@ -393,13 +390,16 @@
                 >cursor_zero</input>
             </graph>
 
-            <value label="Pitch Angle (Front/Back)" unit="°" precision="1">
+            <value label="Front / Back Angle" unit="°" precision="1">
                 <input>pitch_now</input>
             </value>
-            <value label="Roll Angle (Left/Right)" unit="°" precision="1">
+            <value label="Left / Right Angle" unit="°" precision="1">
                 <input>roll_now</input>
             </value>
+        </view>
 
+        <!-- VIEW 2: DEVICE CONFIGURATION -->
+        <view label="Settings">
             <!-- USER CONTROLS -->
             <dropdown label="USB-C Port Points To">
                 <output>mount_usbc</output>
@@ -424,7 +424,7 @@
             <!-- THRESHOLD CONTROLS -->
             <edit
                 decimal="true"
-                label="Front Threshold (+Pitch)"
+                label="Front Tolerance Limit"
                 max="10.0"
                 min="0.1"
                 signed="false"
@@ -434,7 +434,7 @@
             </edit>
             <edit
                 decimal="true"
-                label="Rear Threshold (-Pitch)"
+                label="Rear Tolerance Limit"
                 max="10.0"
                 min="0.1"
                 signed="false"
@@ -444,7 +444,7 @@
             </edit>
             <edit
                 decimal="true"
-                label="Left Threshold (-Roll)"
+                label="Left Tolerance Limit"
                 max="10.0"
                 min="0.1"
                 signed="false"
@@ -454,7 +454,7 @@
             </edit>
             <edit
                 decimal="true"
-                label="Right Threshold (+Roll)"
+                label="Right Tolerance Limit"
                 max="10.0"
                 min="0.1"
                 signed="false"
@@ -463,12 +463,34 @@
                 <output>th_right</output>
             </edit>
 
-            <button label="Set Level (Zero Reference)">
+            <!-- ZERO LEVEL CALIBRATION -->
+            <edit
+                decimal="true"
+                label="Front / Back Zero Level"
+                max="45.0"
+                min="-45.0"
+                signed="true"
+                unit="°"
+            >
+                <output>pitch_offset</output>
+            </edit>
+            <edit
+                decimal="true"
+                label="Left / Right Zero Level"
+                max="45.0"
+                min="-45.0"
+                signed="true"
+                unit="°"
+            >
+                <output>roll_offset</output>
+            </edit>
+
+            <button label="Set Zero Level">
                 <input>pitch_raw</input><output>pitch_offset</output>
                 <input>roll_raw</input><output>roll_offset</output>
             </button>
 
-            <button label="Reset Zero Calibration">
+            <button label="Reset Zero Level">
                 <input type="value">0.0</input><output>pitch_offset</output>
                 <input type="value">0.0</input><output>roll_offset</output>
             </button>
