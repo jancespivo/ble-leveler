@@ -1,102 +1,36 @@
 <phyphox version="1.19">
     <title>Campervan Leveling</title>
     <category>Campervan Tools</category>
-    <description
-    >Dual-Axis Crosshair Gauge with Dynamic Sensor Orientation</description>
+    <description>Dual-Axis Crosshair Gauge with Dynamic Sensor Orientation</description>
 
     <data-containers>
-        <!-- Raw Accelerometer Inputs (6 bytes int16 from BLE) -->
-        <container size="1">raw_ax</container>
-        <container size="1">raw_ay</container>
-        <container size="1">raw_az</container>
-
-        <!-- Dropdowns: 1.0=Front, 2.0=Rear, 3.0=Left, 4.0=Right, 5.0=Up, 6.0=Down -->
-        <container size="1">mount_usbc</container>
-        <container size="1">mount_top</container>
-
-        <!-- Lookup Tables for 6 Orthogonal Cardinal Directions -->
-        <!-- Mode index: 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 -->
-        <container
-            size="6"
-            static="true"
-            init="1.0, 2.0, 3.0, 4.0, 5.0, 6.0"
-        >lut_mode</container>
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, -1.0, 1.0, 0.0, 0.0"
-        >lut_dir_x</container>
-        <container
-            size="6"
-            static="true"
-            init="1.0, -1.0, 0.0, 0.0, 0.0, 0.0"
-        >lut_dir_y</container>
-        <container
-            size="6"
-            static="true"
-            init="0.0, 0.0, 0.0, 0.0, 1.0, -1.0"
-        >lut_dir_z</container>
-
-        <!-- Unit vectors for USB-C and Top Label in vehicle frame -->
-        <container size="1">u_usbc_x</container>
-        <container size="1">u_usbc_y</container>
-        <container size="1">u_usbc_z</container>
-        <container size="1">u_top_x</container>
-        <container size="1">u_top_y</container>
-        <container size="1">u_top_z</container>
-
-        <!-- Sensor coordinate basis vectors in vehicle frame -->
-        <!-- Physical Board Alignment: USB-C is along -X_s, Top is +Z_s, Lateral is +Y_s -->
-        <!-- Sensor X is opposite of USB-C vector: X_s = -u_usbc -->
-        <container size="1">x_sx</container>
-        <container size="1">x_sy</container>
-        <container size="1">x_sz</container>
-
-        <!-- Sensor Z is Top Label vector: Z_s = u_top -->
-        <container size="1">z_sx</container>
-        <container size="1">z_sy</container>
-        <container size="1">z_sz</container>
-
-        <!-- Sensor Y is cross product (u_usbc x u_top) -->
-        <container size="1">y_sx</container>
-        <container size="1">y_sy</container>
-        <container size="1">y_sz</container>
-
-        <!-- Remapped Vehicle Acceleration -->
-        <container size="1">a_lat</container>
-        <container size="1">a_long</container>
-        <container size="1">a_vert</container>
-
-        <!-- Angle Buffers -->
-        <container size="1">pitch_calc</container>
-        <container size="1">roll_calc</container>
-
-        <!-- Tare Offsets and Live Angle Displays -->
-        <container size="1">pitch_offset</container>
-        <container size="1">roll_offset</container>
+        <!-- Streaming Angle Inputs (8 bytes float32 from BLE: pitch, roll) -->
         <container size="1">pitch_now</container>
         <container size="1">roll_now</container>
 
-        <!-- Static Geometry for 1:1 Crosshair Gauge -->
-        <container size="1" static="true" init="0.0">cursor_zero</container>
-        <container
-            size="2"
-            static="true"
-            init="-10.0, 10.0"
-        >range_long</container>
-        <container size="2" static="true" init="0.0, 0.0">const_zero</container>
-        <container
-            size="2"
-            static="true"
-            init="-0.8, 0.8"
-        >tick_short</container>
-        <!-- Thresholds (Front, Rear, Left, Right in degrees) -->
+        <!-- Un-tared Raw Angles for Zero Calibration Button -->
+        <container size="1">pitch_raw</container>
+        <container size="1">roll_raw</container>
+
+        <!-- Stored Configuration Containers -->
+        <container size="1">mount_usbc</container>
+        <container size="1">mount_top</container>
+        <container size="1">pitch_offset</container>
+        <container size="1">roll_offset</container>
         <container size="1">th_front</container>
         <container size="1">th_rear</container>
         <container size="1">th_left</container>
         <container size="1">th_right</container>
+
+        <!-- Dynamic Threshold Buffers -->
         <container size="1">neg_th_rear</container>
         <container size="1">neg_th_left</container>
+
+        <!-- Static Geometry for 1:1 Crosshair Gauge -->
+        <container size="1" static="true" init="0.0">cursor_zero</container>
+        <container size="2" static="true" init="-10.0, 10.0">range_long</container>
+        <container size="2" static="true" init="0.0, 0.0">const_zero</container>
+        <container size="2" static="true" init="-0.8, 0.8">tick_short</container>
 
         <!-- Dynamic Geometry for Comfort Zones and Ticks -->
         <container size="2">zone_pitch</container>
@@ -116,27 +50,21 @@
             subscribeOnStart="true"
             autoConnect="true"
         >
-            <!-- Streaming accelerometer notifications -->
+            <!-- Streaming computed angle notifications -->
             <output
                 char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="0"
-                length="2"
-                conversion="int16LittleEndian"
-            >raw_ax</output>
-            <output
-                char="a0000002-4493-41db-9609-eb926bd307c7"
-                offset="2"
-                length="2"
-                conversion="int16LittleEndian"
-            >raw_ay</output>
+                length="4"
+                conversion="float32LittleEndian"
+            >pitch_now</output>
             <output
                 char="a0000002-4493-41db-9609-eb926bd307c7"
                 offset="4"
-                length="2"
-                conversion="int16LittleEndian"
-            >raw_az</output>
+                length="4"
+                conversion="float32LittleEndian"
+            >roll_now</output>
 
-            <!-- Stored configuration indications -->
+            <!-- Stored configuration indications / notifications -->
             <output
                 char="a0000003-4493-41db-9609-eb926bd307c7"
                 offset="0"
@@ -240,154 +168,19 @@
     </output>
 
     <analysis>
-        <!-- 1. Interpolate USB-C Direction Vector -->
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_x</input>
-            <input as="xi" clear="false">mount_usbc</input>
-            <output>u_usbc_x</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_y</input>
-            <input as="xi" clear="false">mount_usbc</input>
-            <output>u_usbc_y</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_z</input>
-            <input as="xi" clear="false">mount_usbc</input>
-            <output>u_usbc_z</output>
-        </interpolate>
-
-        <!-- 2. Interpolate Top Label Direction Vector -->
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_x</input>
-            <input as="xi" clear="false">mount_top</input>
-            <output>u_top_x</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_y</input>
-            <input as="xi" clear="false">mount_top</input>
-            <output>u_top_y</output>
-        </interpolate>
-        <interpolate>
-            <input as="x" clear="false">lut_mode</input>
-            <input as="y" clear="false">lut_dir_z</input>
-            <input as="xi" clear="false">mount_top</input>
-            <output>u_top_z</output>
-        </interpolate>
-
-        <!-- 3. Sensor X Basis Vector (X_s = -u_usbc) -->
-        <formula formula="-[1]">
-            <input clear="false">u_usbc_x</input>
-            <output>x_sx</output>
-        </formula>
-        <formula formula="-[1]">
-            <input clear="false">u_usbc_y</input>
-            <output>x_sy</output>
-        </formula>
-        <formula formula="-[1]">
-            <input clear="false">u_usbc_z</input>
-            <output>x_sz</output>
-        </formula>
-
-        <!-- 4. Sensor Z Basis Vector (Z_s = u_top) -->
-        <formula formula="[1]">
-            <input clear="false">u_top_x</input>
-            <output>z_sx</output>
-        </formula>
-        <formula formula="[1]">
-            <input clear="false">u_top_y</input>
-            <output>z_sy</output>
-        </formula>
-        <formula formula="[1]">
-            <input clear="false">u_top_z</input>
-            <output>z_sz</output>
-        </formula>
-
-        <!-- 5. Sensor Y Basis Vector (Y_s = u_usbc x u_top) -->
-        <formula formula="[1]*[2] - [3]*[4]">
-            <input clear="false">u_usbc_y</input>
-            <input clear="false">u_top_z</input>
-            <input clear="false">u_usbc_z</input>
-            <input clear="false">u_top_y</input>
-            <output>y_sx</output>
-        </formula>
-        <formula formula="[1]*[2] - [3]*[4]">
-            <input clear="false">u_usbc_z</input>
-            <input clear="false">u_top_x</input>
-            <input clear="false">u_usbc_x</input>
-            <input clear="false">u_top_z</input>
-            <output>y_sy</output>
-        </formula>
-        <formula formula="[1]*[2] - [3]*[4]">
-            <input clear="false">u_usbc_x</input>
-            <input clear="false">u_top_y</input>
-            <input clear="false">u_usbc_y</input>
-            <input clear="false">u_top_x</input>
-            <output>y_sz</output>
-        </formula>
-
-        <!-- 6. Vehicle Frame Coordinate Transformation -->
-        <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
-            <input clear="false">raw_ax</input>
-            <input clear="false">x_sx</input>
-            <input clear="false">raw_ay</input>
-            <input clear="false">y_sx</input>
-            <input clear="false">raw_az</input>
-            <input clear="false">z_sx</input>
-            <output>a_lat</output>
-        </formula>
-        <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
-            <input clear="false">raw_ax</input>
-            <input clear="false">x_sy</input>
-            <input clear="false">raw_ay</input>
-            <input clear="false">y_sy</input>
-            <input clear="false">raw_az</input>
-            <input clear="false">z_sy</input>
-            <output>a_long</output>
-        </formula>
-        <formula formula="[1]*[2] + [3]*[4] + [5]*[6]">
-            <input clear="false">raw_ax</input>
-            <input clear="false">x_sz</input>
-            <input clear="false">raw_ay</input>
-            <input clear="false">y_sz</input>
-            <input clear="false">raw_az</input>
-            <input clear="false">z_sz</input>
-            <output>a_vert</output>
-        </formula>
-
-        <!-- 7. Trigonometry and Tare Angle Computation -->
-        <!-- Inverted longitudinal acceleration so dot moves toward the low side (consistent with Roll) -->
-        <formula formula="atan2(-[2], sqrt([1]^2 + [3]^2)) * 57.2957795">
-            <input clear="false">a_lat</input>
-            <input clear="false">a_long</input>
-            <input clear="false">a_vert</input>
-            <output>pitch_calc</output>
-        </formula>
-
-        <formula formula="atan2(-[1], [2]) * 57.2957795">
-            <input clear="false">a_lat</input>
-            <input clear="false">a_vert</input>
-            <output>roll_calc</output>
-        </formula>
-
-        <formula formula="[1] - [2]">
-            <input clear="false">pitch_calc</input>
+        <!-- 1. Recover un-tared raw angles for the tare button -->
+        <formula formula="[1] + [2]">
+            <input clear="false">pitch_now</input>
             <input clear="false">pitch_offset</input>
-            <output>pitch_now</output>
+            <output>pitch_raw</output>
         </formula>
-
-        <formula formula="[1] - [2]">
-            <input clear="false">roll_calc</input>
+        <formula formula="[1] + [2]">
+            <input clear="false">roll_now</input>
             <input clear="false">roll_offset</input>
-            <output>roll_now</output>
+            <output>roll_raw</output>
         </formula>
 
-        <!-- 8. Threshold Bound Calculations and Dynamic Geometry Generation -->
+        <!-- 2. Threshold Bound Calculations and Dynamic Geometry Generation -->
         <formula formula="-[1]">
             <input clear="false">th_rear</input>
             <output>neg_th_rear</output>
@@ -671,8 +464,8 @@
             </edit>
 
             <button label="Set Level (Zero Reference)">
-                <input>pitch_calc</input><output>pitch_offset</output>
-                <input>roll_calc</input><output>roll_offset</output>
+                <input>pitch_raw</input><output>pitch_offset</output>
+                <input>roll_raw</input><output>roll_offset</output>
             </button>
 
             <button label="Reset Zero Calibration">

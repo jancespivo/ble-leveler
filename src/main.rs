@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+mod leveling;
+
 use bt_hci::uuid::appearance;
 
 use core::cell::RefCell;
@@ -12,6 +14,7 @@ use embassy_nrf::twim::Twim;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Duration;
+use leveling::{DeviceConfig, calculate_angles};
 use static_cell::StaticCell;
 use trouble_host::Address;
 
@@ -144,7 +147,7 @@ const LEVELING_SERVICE_UUID: Uuid = uuid!("a0000001-4493-41db-9609-eb926bd307c7"
 #[gatt_service(uuid = LEVELING_SERVICE_UUID)]
 struct LevelingService {
     #[characteristic(uuid = "a0000002-4493-41db-9609-eb926bd307c7", read, notify)]
-    angles: [u8; 6],
+    angles: [u8; 8],
     #[characteristic(
         uuid = "a0000003-4493-41db-9609-eb926bd307c7",
         write,
@@ -165,109 +168,6 @@ struct Server {
 // Dedicated 8 KB storage sector defined in memory.x (0x000FE000..0x00100000)
 const STORAGE_RANGE: core::ops::Range<u32> = 0x000FE000..0x00100000;
 const CONFIG_KEY: u8 = 1;
-
-#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
-pub struct DeviceConfig {
-    pub usbc_dir: u8,
-    pub top_dir: u8,
-    pub pitch_offset: f32,
-    pub roll_offset: f32,
-    pub th_front: f32,
-    pub th_rear: f32,
-    pub th_left: f32,
-    pub th_right: f32,
-}
-
-impl DeviceConfig {
-    pub const DEFAULT: Self = Self {
-        usbc_dir: 2, // Rear
-        top_dir: 5,  // Up
-        pitch_offset: 0.0,
-        roll_offset: 0.0,
-        th_front: 1.5,
-        th_rear: 1.5,
-        th_left: 1.5,
-        th_right: 1.5,
-    };
-
-    pub fn to_bytes(&self) -> [u8; 26] {
-        let mut bytes = [0u8; 26];
-        bytes[0] = self.usbc_dir;
-        bytes[1] = self.top_dir;
-        bytes[2..6].copy_from_slice(&self.pitch_offset.to_le_bytes());
-        bytes[6..10].copy_from_slice(&self.roll_offset.to_le_bytes());
-        bytes[10..14].copy_from_slice(&self.th_front.to_le_bytes());
-        bytes[14..18].copy_from_slice(&self.th_rear.to_le_bytes());
-        bytes[18..22].copy_from_slice(&self.th_left.to_le_bytes());
-        bytes[22..26].copy_from_slice(&self.th_right.to_le_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() >= 26 {
-            let usbc_dir = bytes[0];
-            let top_dir = bytes[1];
-            if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
-                return None;
-            }
-            let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
-            let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
-
-            let f = f32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]);
-            let r = f32::from_le_bytes([bytes[14], bytes[15], bytes[16], bytes[17]]);
-            let l = f32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]);
-            let rg = f32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]);
-
-            let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
-            let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
-            let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
-            let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
-
-            Some(Self {
-                usbc_dir,
-                top_dir,
-                pitch_offset,
-                roll_offset,
-                th_front,
-                th_rear,
-                th_left,
-                th_right,
-            })
-        } else if bytes.len() == 18 {
-            // Backward Compatibility: Decode legacy 18-byte format (thresholds scaled in centidegrees).
-            let usbc_dir = bytes[0];
-            let top_dir = bytes[1];
-            if !(1..=6).contains(&usbc_dir) || !(1..=6).contains(&top_dir) {
-                return None;
-            }
-            let pitch_offset = f32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
-            let roll_offset = f32::from_le_bytes([bytes[6], bytes[7], bytes[8], bytes[9]]);
-
-            let f = i16::from_le_bytes([bytes[10], bytes[11]]) as f32 / 100.0;
-            let r = i16::from_le_bytes([bytes[12], bytes[13]]) as f32 / 100.0;
-            let l = i16::from_le_bytes([bytes[14], bytes[15]]) as f32 / 100.0;
-            let rg = i16::from_le_bytes([bytes[16], bytes[17]]) as f32 / 100.0;
-
-            let th_front = if f > 0.0 && !f.is_nan() { f } else { 1.5 };
-            let th_rear = if r > 0.0 && !r.is_nan() { r } else { 1.5 };
-            let th_left = if l > 0.0 && !l.is_nan() { l } else { 1.5 };
-            let th_right = if rg > 0.0 && !rg.is_nan() { rg } else { 1.5 };
-
-            Some(Self {
-                usbc_dir,
-                top_dir,
-                pitch_offset,
-                roll_offset,
-                th_front,
-                th_rear,
-                th_left,
-                th_right,
-            })
-        } else {
-            None
-        }
-    }
-}
 
 async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
     let mut buf = [0u8; 64];
@@ -626,11 +526,15 @@ async fn main(spawner: Spawner) {
                     loop {
                         embassy_time::Timer::after(Duration::from_millis(50)).await;
                         let raw_data = read_raw_accel(&mut twi).await;
-
-                        if let Err(e) = server.leveling.angles.notify(&conn, &raw_data, false).await
-                        {
-                            defmt::warn!("Notify failed: {:?}", defmt::Debug2Format(&e));
-                            break;
+                        let current_cfg = dev_config.lock(|c| *c.borrow());
+                        if let Some(angles) = calculate_angles(&raw_data, &current_cfg) {
+                            let angles_bytes = angles.to_bytes();
+                            if let Err(e) =
+                                server.leveling.angles.notify(&conn, &angles_bytes, false).await
+                            {
+                                defmt::warn!("Notify failed: {:?}", defmt::Debug2Format(&e));
+                                break;
+                            }
                         }
                     }
                 },
