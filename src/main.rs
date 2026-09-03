@@ -1,7 +1,10 @@
 #![no_std]
 #![no_main]
 
+mod accelerometer;
+mod bluetooth;
 mod leveling;
+mod storage;
 
 use bt_hci::uuid::appearance;
 
@@ -9,30 +12,30 @@ use core::cell::RefCell;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::select;
+use embassy_nrf::gpio::{Level, Output, OutputDrive};
+use embassy_nrf::peripherals::TWISPI1;
 use embassy_nrf::rng;
 use embassy_nrf::twim::Twim;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Duration;
 use leveling::{DeviceConfig, calculate_angles};
-use static_cell::StaticCell;
-use trouble_host::Address;
-
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
-use embassy_nrf::peripherals::TWISPI1;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
-use trouble_host::BleHostError;
-use trouble_host::advertise::AdStructure;
-use trouble_host::advertise::Advertisement;
-use trouble_host::advertise::BR_EDR_NOT_SUPPORTED;
-use trouble_host::advertise::LE_GENERAL_DISCOVERABLE;
+use static_cell::StaticCell;
+use trouble_host::Address;
 use trouble_host::gap::GapConfig;
 use trouble_host::gap::PeripheralConfig;
-use trouble_host::gatt::GattConnection;
-use trouble_host::peripheral::Peripheral;
+
 use trouble_host::prelude::*;
 use {defmt_rtt as _, panic_probe as _};
+
+use accelerometer::{init_accelerometer, read_raw_accel};
+use bluetooth::{
+    CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, Server, advertise, ble_task, build_sdc,
+    transfer_phyphox_experiment,
+};
+use storage::{load_config, save_config};
 
 embassy_nrf::bind_interrupts!(struct Irqs {
     RNG => embassy_nrf::rng::InterruptHandler<embassy_nrf::peripherals::RNG>;
@@ -48,211 +51,6 @@ embassy_nrf::bind_interrupts!(struct Irqs {
 #[embassy_executor::task]
 async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
     mpsl.run().await
-}
-
-const L2CAP_TXQ: u8 = 3;
-const L2CAP_RXQ: u8 = 3;
-const CONNECTIONS_MAX: usize = 1;
-const L2CAP_CHANNELS_MAX: usize = 2;
-
-fn build_sdc<'d, const N: usize>(
-    p: nrf_sdc::Peripherals<'d>,
-    rng: &'d mut rng::Rng<embassy_nrf::mode::Async>,
-    mpsl: &'d MultiprotocolServiceLayer,
-    mem: &'d mut sdc::Mem<N>,
-) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    sdc::Builder::new()?
-        .support_adv()
-        .support_peripheral()
-        .peripheral_count(1)?
-        .buffer_cfg(
-            DefaultPacketPool::MTU as u16,
-            DefaultPacketPool::MTU as u16,
-            L2CAP_TXQ,
-            L2CAP_RXQ,
-        )?
-        .build(p, rng, mpsl, mem)
-}
-
-const PHYPHOX_EXPERIMENT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/leveling.zip"));
-
-const PHYPHOX_SERVICE_UUID: Uuid = uuid!("cddf0001-30f7-4671-8b43-5e40ba53514a");
-#[gatt_service(uuid = PHYPHOX_SERVICE_UUID)]
-struct PhyphoxService {
-    #[characteristic(uuid = "cddf0002-30f7-4671-8b43-5e40ba53514a", read, notify)]
-    experiment_data: [u8; 20],
-    #[characteristic(
-        uuid = "cddf0003-30f7-4671-8b43-5e40ba53514a",
-        write,
-        write_without_response
-    )]
-    experiment_ctrl: u8,
-}
-
-// CRC32 calculation for Phyphox experiment transfer verification
-fn calculate_crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFFu32;
-    for &b in data {
-        crc ^= b as u32;
-        for _ in 0..8 {
-            if crc & 1 != 0 {
-                crc = (crc >> 1) ^ 0xEDB8_8320;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-    !crc
-}
-
-async fn transfer_phyphox_experiment<P: PacketPool>(
-    conn: &GattConnection<'_, '_, P>,
-    server: &Server<'_>,
-) {
-    defmt::info!(
-        "Starting Phyphox XML transfer ({} bytes)",
-        PHYPHOX_EXPERIMENT.len()
-    );
-    let crc = calculate_crc32(PHYPHOX_EXPERIMENT);
-
-    // Build and send 15-byte Header Message
-    let mut header = [0u8; 20];
-    header[0..7].copy_from_slice(b"phyphox");
-    header[7..11].copy_from_slice(&(PHYPHOX_EXPERIMENT.len() as u32).to_be_bytes());
-    header[11..15].copy_from_slice(&crc.to_be_bytes());
-
-    let _ = server
-        .phyphox
-        .experiment_data
-        .notify(conn, &header, false)
-        .await;
-    embassy_time::Timer::after(Duration::from_millis(20)).await;
-
-    //  Transmit file in 20-byte chunks
-    for chunk in PHYPHOX_EXPERIMENT.chunks(20) {
-        let mut packet = [0u8; 20];
-        packet[..chunk.len()].copy_from_slice(chunk);
-        let _ = server
-            .phyphox
-            .experiment_data
-            .notify(conn, &packet, false)
-            .await;
-        embassy_time::Timer::after(Duration::from_millis(15)).await;
-    }
-    defmt::info!("Phyphox XML transfer complete");
-}
-
-const LEVELING_SERVICE_UUID: Uuid = uuid!("a0000001-4493-41db-9609-eb926bd307c7");
-
-#[gatt_service(uuid = LEVELING_SERVICE_UUID)]
-struct LevelingService {
-    #[characteristic(uuid = "a0000002-4493-41db-9609-eb926bd307c7", read, notify)]
-    angles: [u8; 8],
-    #[characteristic(
-        uuid = "a0000003-4493-41db-9609-eb926bd307c7",
-        write,
-        write_without_response,
-        read,
-        notify,
-        indicate
-    )]
-    config: [u8; 26],
-}
-
-#[gatt_server]
-struct Server {
-    phyphox: PhyphoxService,
-    leveling: LevelingService,
-}
-
-// Dedicated 8 KB storage sector defined in memory.x (0x000FE000..0x00100000)
-const STORAGE_RANGE: core::ops::Range<u32> = 0x000FE000..0x00100000;
-const CONFIG_KEY: u8 = 1;
-
-async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
-    let mut buf = [0u8; 64];
-    // Defensive Logic: fetch as slice &[u8] because sequential-storage panics on fixed array size mismatch.
-    let res = sequential_storage::map::fetch_item::<u8, &[u8], _>(
-        flash,
-        STORAGE_RANGE,
-        &mut sequential_storage::cache::NoCache::new(),
-        &mut buf,
-        &CONFIG_KEY,
-    )
-    .await;
-
-    match res {
-        Ok(Some(bytes)) => {
-            if let Some(cfg) = DeviceConfig::from_bytes(bytes) {
-                defmt::info!("Loaded config from flash -> {:?}", cfg);
-                return cfg;
-            }
-        }
-        Ok(None) => {
-            defmt::info!("No stored config found in flash, using default config");
-        }
-        Err(e) => {
-            defmt::warn!("Flash read error: {:?}", defmt::Debug2Format(&e));
-        }
-    }
-    DeviceConfig::DEFAULT
-}
-
-async fn save_config<'d>(flash: &mut nrf_mpsl::Flash<'d>, config: &DeviceConfig) {
-    let bytes = config.to_bytes();
-    // Flash operations share radio timeslots via MPSL.
-    // Retry with delay when ongoing BLE activity causes temporary ENOMEM errors.
-    for attempt in 1..=5 {
-        let mut buf = [0u8; 64];
-        let res = sequential_storage::map::store_item::<u8, &[u8], _>(
-            flash,
-            STORAGE_RANGE,
-            &mut sequential_storage::cache::NoCache::new(),
-            &mut buf,
-            &CONFIG_KEY,
-            &&bytes[..],
-        )
-        .await;
-
-        match res {
-            Ok(()) => {
-                defmt::info!("Saved config to flash (attempt {}): {:?}", attempt, config);
-                return;
-            }
-            Err(e) => {
-                defmt::warn!(
-                    "Flash write attempt {} failed: {:?}",
-                    attempt,
-                    defmt::Debug2Format(&e)
-                );
-                embassy_time::Timer::after(Duration::from_millis(50)).await;
-            }
-        }
-    }
-    defmt::error!("Failed to save config to flash after 5 attempts");
-}
-
-const LSM6DS3_ADDRESS: u8 = 0x6A;
-const LSM6DS3_WHO_AM_I_REG: u8 = 0x0F;
-const LSM6DS3_CTRL1_XL: u8 = 0x10;
-const LSM6DS3_CTRL8_XL: u8 = 0x17;
-const LSM6DS3_OUTX_L_XL: u8 = 0x28;
-
-async fn read_raw_accel(twi: &mut Twim<'static>) -> [u8; 6] {
-    let mut raw_data = [0u8; 6];
-    twi.write_read(LSM6DS3_ADDRESS, &[LSM6DS3_OUTX_L_XL], &mut raw_data)
-        .await
-        .unwrap();
-    raw_data
-}
-
-async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
-    loop {
-        if let Err(e) = runner.run().await {
-            let e = defmt::Debug2Format(&e);
-            panic!("[ble_task] error: {:?}", e);
-        }
-    }
 }
 
 #[embassy_executor::main]
@@ -277,22 +75,7 @@ async fn main(spawner: Spawner) {
     let mut twi = Twim::new(p.TWISPI1, Irqs, p.P0_07, p.P0_27, config, RAM_BUFFER.take());
     defmt::info!("I2C prepared");
 
-    let reg = [LSM6DS3_WHO_AM_I_REG];
-    let mut raw_data = [0u8; 1];
-    twi.write_read(LSM6DS3_ADDRESS, &reg, &mut raw_data)
-        .await
-        .unwrap();
-    defmt::info!("IMU prepared {}", raw_data);
-
-    // Configure LSM6DS3: 104 Hz (ODR), +/- 2g scale
-    twi.write(LSM6DS3_ADDRESS, &[LSM6DS3_CTRL1_XL, 0x4A])
-        .await
-        .unwrap();
-    twi.write(LSM6DS3_ADDRESS, &[LSM6DS3_CTRL8_XL, 0x09])
-        .await
-        .unwrap();
-
-    defmt::info!("IMU configured");
+    init_accelerometer(&mut twi).await;
 
     let mpsl_p =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
@@ -513,47 +296,4 @@ async fn main(spawner: Spawner) {
         }
     })
     .await;
-}
-
-async fn advertise<'values, 'server, C: Controller>(
-    name: &'values str,
-    peripheral: &mut Peripheral<'values, C, DefaultPacketPool>,
-    server: &'server Server<'values>,
-) -> Result<GattConnection<'values, 'server, DefaultPacketPool>, BleHostError<C::Error>> {
-    let mut advertiser_data = [0; 31];
-    let adv_len = AdStructure::encode_slice(
-        &[
-            AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::CompleteServiceUuids128(&[LEVELING_SERVICE_UUID
-                .as_raw()
-                .try_into()
-                .unwrap()]),
-        ],
-        &mut advertiser_data[..],
-    )?;
-    let mut scan_data = [0; 31];
-    let scan_len = AdStructure::encode_slice(
-        &[
-            AdStructure::CompleteServiceUuids128(&[PHYPHOX_SERVICE_UUID
-                .as_raw()
-                .try_into()
-                .unwrap()]),
-            AdStructure::CompleteLocalName(name.as_bytes()),
-        ],
-        &mut scan_data[..],
-    )?;
-
-    let advertiser = peripheral
-        .advertise(
-            &Default::default(),
-            Advertisement::ConnectableScannableUndirected {
-                adv_data: &advertiser_data[..adv_len],
-                scan_data: &scan_data[..scan_len],
-            },
-        )
-        .await?;
-    defmt::info!("[adv] advertising");
-    let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    defmt::info!("[adv] connection established");
-    Ok(conn)
 }
