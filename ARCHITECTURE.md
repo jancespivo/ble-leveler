@@ -1,6 +1,6 @@
 # System Architecture
 
-This document describes the software architecture, data models, and implementation details for the **Leveler** firmware.
+This document describes the software architecture, data models, and implementation details for the **ble-leveler** firmware.
 
 ---
 
@@ -153,6 +153,6 @@ The application runs on the Embassy async executor with structured concurrency:
 
 ### 2.8 Build-Time Compression Pipeline (`build.rs`)
 
-- Compresses `leveler.phyphox` into a Deflate ZIP archive (`leveler.zip`) during compilation.
+- Compresses `ble-leveler.phyphox` into a Deflate ZIP archive (`ble-leveler.zip`) during compilation.
 - The compressed payload is embedded into the firmware binary via `include_bytes!`.
 - Generates linker configuration scripts for `probe-rs` and `defmt`.

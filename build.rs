@@ -14,7 +14,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
-    zip_leveler_phyphox();
+    zip_ble_leveler_phyphox();
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
@@ -39,15 +39,16 @@ use std::io::Read;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-fn zip_leveler_phyphox() {
-    // Re-run this build script if leveler.phyphox changes
-    println!("cargo:rerun-if-changed=leveler.phyphox");
+fn zip_ble_leveler_phyphox() {
+    // Re-run this build script if ble-leveler.phyphox changes
+    println!("cargo:rerun-if-changed=ble-leveler.phyphox");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let zip_path = out_dir.join("leveler.zip");
+    let zip_path = out_dir.join("ble-leveler.zip");
 
     // Read the XML file
-    let mut xml_file = File::open("leveler.phyphox").expect("Failed to open leveler.phyphox");
+    let mut xml_file =
+        File::open("ble-leveler.phyphox").expect("Failed to open ble-leveler.phyphox");
     let mut xml_data = Vec::new();
     xml_file.read_to_end(&mut xml_data).unwrap();
 
@@ -57,7 +58,7 @@ fn zip_leveler_phyphox() {
 
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-    zip.start_file("leveler.phyphox", options).unwrap();
+    zip.start_file("ble-leveler.phyphox", options).unwrap();
     zip.write_all(&xml_data).unwrap();
     zip.finish().unwrap();
 }

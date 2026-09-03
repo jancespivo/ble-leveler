@@ -86,6 +86,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
+name = "ble-leveler"
+version = "0.1.0"
+dependencies = [
+ "bt-hci",
+ "btuuid",
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt 1.1.1",
+ "defmt-rtt",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-nrf",
+ "embassy-sync",
+ "embassy-time",
+ "libm",
+ "nrf-mpsl",
+ "nrf-sdc",
+ "panic-probe",
+ "sequential-storage",
+ "static_cell",
+ "trouble-host",
+ "zip",
+]
+
+[[package]]
 name = "bt-hci"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -872,31 +897,6 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
-name = "leveler"
-version = "0.1.0"
-dependencies = [
- "bt-hci",
- "btuuid",
- "cortex-m",
- "cortex-m-rt",
- "defmt 1.1.1",
- "defmt-rtt",
- "embassy-executor",
- "embassy-futures",
- "embassy-nrf",
- "embassy-sync",
- "embassy-time",
- "libm",
- "nrf-mpsl",
- "nrf-sdc",
- "panic-probe",
- "sequential-storage",
- "static_cell",
- "trouble-host",
- "zip",
-]
 
 [[package]]
 name = "libc"

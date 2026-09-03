@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "leveler"
+name = "ble-leveler"
 version = "0.1.0"
 resolver = "2"
 

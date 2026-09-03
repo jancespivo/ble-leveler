@@ -35,7 +35,7 @@ pub fn build_sdc<'d, const N: usize>(
         .build(p, rng, mpsl, mem)
 }
 
-pub const PHYPHOX_EXPERIMENT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/leveler.zip"));
+pub const PHYPHOX_EXPERIMENT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ble-leveler.zip"));
 
 pub const PHYPHOX_SERVICE_UUID: Uuid = uuid!("cddf0001-30f7-4671-8b43-5e40ba53514a");
 

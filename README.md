@@ -1,12 +1,12 @@
-# Leveler
+# ble-leveler
 
-[![License](https://img.shields.io/badge/License-MIT--or--Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT--or--Apache--2.0-blue.svg)](#license)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![Framework: Embassy](https://img.shields.io/badge/Framework-Embassy-purple.svg)](https://embassy.dev/)
 
 Hassle-free Bluetooth leveling device and mobile interface. Powered by Rust, Bluetooth Low Energy (BLE), and the open-source Phyphox app.
 
-**Leveler** is a wireless leveling solution for the Nordic nRF52840 microcontroller (Seeed Studio XIAO BLE Sense) and LSM6DS3 IMU. It operates as a self-describing sensor device that transmits an interactive dual-axis crosshair display directly to your smartphone with no custom app store installation.
+**ble-leveler** is a wireless leveling solution for the Nordic nRF52840 microcontroller (Seeed Studio XIAO BLE Sense) and LSM6DS3 IMU. It operates as a self-describing sensor device that transmits an interactive dual-axis crosshair display directly to your smartphone with no custom app store installation.
 
 ---
 
@@ -67,7 +67,7 @@ Connect your debug probe to the Seeed Studio XIAO BLE Sense SWD pins and run:
 cargo run --release
 ```
 
-The build script compresses `leveler.phyphox` into the binary automatically, flashes the target, and starts `defmt` logging.
+The build script compresses `ble-leveler.phyphox` into the binary automatically, flashes the target, and starts `defmt` logging.
 
 ---
 
@@ -85,4 +85,9 @@ The build script compresses `leveler.phyphox` into the binary automatically, fla
 
 ## License
 
-This project is dual-licensed under the MIT License and the Apache License (Version 2.0).
+This project is dual-licensed under either:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
+
+at your option.

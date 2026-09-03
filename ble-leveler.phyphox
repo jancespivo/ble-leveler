@@ -1,7 +1,7 @@
 <phyphox version="1.19">
     <title>Leveler</title>
     <category>Tools</category>
-    <description>Dual-Axis Crosshair Gauge with Dynamic Sensor Orientation</description>
+    <description>Bluetooth leveling tool</description>
 
     <data-containers>
         <!-- Streaming Angle Inputs (8 bytes float32 from BLE: pitch, roll) -->
