@@ -278,9 +278,10 @@ async fn main(spawner: Spawner) {
                 async {
                     loop {
                         embassy_time::Timer::after(Duration::from_millis(50)).await;
-                        let raw_data = read_raw_accel(&mut twi).await;
+                        let raw_accel = read_raw_accel(&mut twi).await;
                         let current_cfg = dev_config.lock(|c| *c.borrow());
-                        if let Some(angles) = calculate_angles(&raw_data, &current_cfg) {
+
+                        if let Some(angles) = calculate_angles(&raw_accel, &current_cfg) {
                             let angles_bytes = angles.to_bytes();
                             if let Err(e) =
                                 server.leveling.angles.notify(&conn, &angles_bytes, false).await

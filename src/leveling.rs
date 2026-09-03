@@ -286,9 +286,7 @@ mod tests {
                 }
             }
         }
-        // 6 faces * 4 valid perpendicular orientations per face = 24 valid orientations
         assert_eq!(valid_count, 24);
-        // 36 total pairs - 24 valid = 12 invalid (6 parallel + 6 opposite)
         assert_eq!(invalid_count, 12);
     }
 
