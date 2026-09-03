@@ -131,7 +131,27 @@ Transfers the compressed experiment UI directly to the Phyphox app upon connecti
 
 ---
 
-### 2.5 Build-Time Compression Pipeline (`build.rs`)
+### 2.6 Firmware Concurrency & Task Architecture (`src/main.rs`)
+
+The application runs on the Embassy async executor with structured concurrency:
+
+- **MPSL Task:** Executes the Multiprotocol Service Layer background runtime for radio and hardware peripheral multiplexing.
+- **Connection Handler Loop:** Upon connection establishment, coordinates two concurrent asynchronous tasks via `embassy_futures::select::select`:
+  - **GATT Event Task:** Processes attribute reads, writes, and CCCD subscription events. Manages experiment data transmission and persists updated configuration to flash memory.
+  - **Measurement & Notification Task:** Periodically polls accelerometer samples at 20 Hz, applies coordinate transformations and zero calibration offsets, and transmits angle notifications over BLE.
+
+---
+
+### 2.7 Device Identification & BLE Advertising (`src/main.rs`, `src/bluetooth.rs`)
+
+- **Static Random Address:** Derived from hardware factory information configuration registers (`FICR.DEVICEADDR[0..1]`).
+- **Dynamic Device Name:** Generated in the format `Leveler XXX` where `XXX` represents the 12-bit hexadecimal representation of `FICR.DEVICEID[0]`.
+- **Advertisement Payload:** Encodes General Discoverable flags and the 128-bit Leveling Service UUID (`a0000001-...`).
+- **Scan Response Payload:** Encodes the 128-bit Phyphox Service UUID (`cddf0001-...`) and the complete local device name.
+
+---
+
+### 2.8 Build-Time Compression Pipeline (`build.rs`)
 
 - Compresses `leveler.phyphox` into a Deflate ZIP archive (`leveler.zip`) during compilation.
 - The compressed payload is embedded into the firmware binary via `include_bytes!`.

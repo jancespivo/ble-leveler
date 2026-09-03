@@ -21,28 +21,19 @@ Hassle-free Bluetooth leveling device and mobile interface. Powered by Rust, Blu
 
 ---
 
-## Capabilities
+## Key Features
 
-- **Memory Safety and Reliability:** Built with `no_std` Rust on the asynchronous `embassy` framework.
-- **Zero App Installation:** Uses the open-source **Phyphox** application. The firmware automatically compresses and transfers the full interactive experiment UI over BLE.
-- **Universal 24-Orientation Mounting:** Mount the sensor in any of the 24 orthogonal orientations. The internal vector engine calculates accurate pitch and roll angles automatically.
-- **Persistent Flash Storage:** Stores orientation configurations, zero-reference tare calibrations, and tolerance thresholds in non-volatile flash memory with wear leveling.
-- **Low-Power Operation:** Uses the `trouble-host` BLE stack and asynchronous sleep modes to minimize power consumption.
+- **Zero App Installation:** Works with the free [Phyphox app](https://phyphox.org/). The sensor transmits the full user interface over Bluetooth on first connection.
+- **Universal 24-Orientation Mounting:** Mount the sensor in any direction. The system calculates vehicle pitch and roll automatically.
+- **Persistent Calibration:** Saves mounting orientation, level reference points, and tolerance limits in non-volatile memory.
+- **Visual Crosshair Display:** Live dual-axis crosshair display moves to the lower side of the vehicle for intuitive ramp positioning.
+- **Low Power Consumption:** Uses Bluetooth Low Energy for long operational battery life.
 
 ---
 
-## System Architecture
+## Documentation
 
-```mermaid
-graph TD
-    A[LSM6DS3 IMU] -->|I2C 104 Hz| B[Leveler Firmware: nRF52840]
-    C[Internal Flash: sequential-storage] <-->|Read / Write Config| B
-    B -->|BLE GATT Notifications 20 Hz| D[Phyphox Mobile App]
-    B -.->|BLE OTA XML Transfer| D
-    D -->|Dual-Axis Gauge Display| E[Interactive Driver Interface]
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full subsystem documentation, mathematical coordinate transformations, BLE GATT specifications, and flash storage details.
+For system architecture, hardware interface details, coordinate mathematics, BLE GATT specifications, and storage design, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
