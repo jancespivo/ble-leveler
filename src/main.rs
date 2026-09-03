@@ -184,17 +184,7 @@ async fn load_config<'d>(flash: &mut nrf_mpsl::Flash<'d>) -> DeviceConfig {
     match res {
         Ok(Some(bytes)) => {
             if let Some(cfg) = DeviceConfig::from_bytes(bytes) {
-                defmt::info!(
-                    "Loaded config from flash -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
-                    cfg.usbc_dir,
-                    cfg.top_dir,
-                    cfg.pitch_offset,
-                    cfg.roll_offset,
-                    cfg.th_front,
-                    cfg.th_rear,
-                    cfg.th_left,
-                    cfg.th_right
-                );
+                defmt::info!("Loaded config from flash -> {:?}", cfg);
                 return cfg;
             }
         }
@@ -408,17 +398,7 @@ async fn main(spawner: Spawner) {
                                 if let GattEvent::Read(read_event) = &event {
                                     if read_event.handle() == server.leveling.config.handle {
                                         let cfg = dev_config.lock(|c| *c.borrow());
-                                        defmt::info!(
-                                            "Phone read config -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
-                                            cfg.usbc_dir,
-                                            cfg.top_dir,
-                                            cfg.pitch_offset,
-                                            cfg.roll_offset,
-                                            cfg.th_front,
-                                            cfg.th_rear,
-                                            cfg.th_left,
-                                            cfg.th_right
-                                        );
+                                        defmt::info!("Phone read config -> {:?}", cfg);
                                     }
                                 }
 
@@ -441,17 +421,7 @@ async fn main(spawner: Spawner) {
                                                         data.len(),
                                                         data
                                                     );
-                                                    defmt::info!(
-                                                        "New config applied -> USB-C: {}, Top: {}, Pitch Offset: {} deg, Roll Offset: {} deg, Thresholds [Front: {} deg, Rear: {} deg, Left: {} deg, Right: {} deg]",
-                                                        cfg.usbc_dir,
-                                                        cfg.top_dir,
-                                                        cfg.pitch_offset,
-                                                        cfg.roll_offset,
-                                                        cfg.th_front,
-                                                        cfg.th_rear,
-                                                        cfg.th_left,
-                                                        cfg.th_right
-                                                    );
+                                                    defmt::info!("New config applied -> {:?}", cfg);
                                                     new_config = Some(cfg);
                                                 }
                                             } else {
